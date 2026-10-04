@@ -20,7 +20,33 @@ C:\ProgramData\miniforge3\Scripts\conda.exe env create -f environment.yml
 "$USERPROFILE/.conda/envs/aircraft_tutorial/python.exe" -m pip install ../system_design/externals/xfoil-python
 ```
 
+Install the package in editable mode, once:
+
+```
+"$USERPROFILE/.conda/envs/aircraft_tutorial/python.exe" -m pip install -e . --no-deps
+```
+
 VS Code uses the env automatically (`.vscode/settings.json`).
+
+## Layout
+
+```
+airfoils/                 airfoil coordinate files (.dat)
+inputs/                   run definitions and values read from reference reports
+scripts/                  runnable steps: python -m scripts.<name>, from the repo root
+src/aircraft_tutorial/
+  common/                 tools for every stage (units, fitting)
+  config/                 input loading and validation
+  geometry/               airfoil geometry
+  section/                2D section analysis (XFoil)
+  contracts/              data passed between stages
+  plots/                  figures
+results/                  generated data and figures, one folder per stage
+tests/                    pytest suite, mirrors src/
+```
+
+A stage package never imports another stage package. Data passes between stages through
+`contracts/` only. A package is created when it gets its first module.
 
 ## Checks
 
@@ -31,4 +57,5 @@ VS Code uses the env automatically (`.vscode/settings.json`).
 
 ## License
 
-GPL-3.0-or-later, full text in [`LICENSE`](LICENSE).
+GPL-3.0-or-later, full text in [`LICENSE`](LICENSE). Airfoil coordinate files supplied
+by the group from external sources keep their own terms.
