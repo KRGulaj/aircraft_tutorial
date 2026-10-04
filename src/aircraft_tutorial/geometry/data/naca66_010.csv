@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 KRGulaj
+# Created: 2026-10-04
+# NACA 66-010 basic thickness form. Abbott & von Doenhoff, Theory of Wing Sections, App. I, p.375.
+# Read from the scan at 300 dpi. The OCR layer is wrong at x = 2.5 (1.616) and x = 15 (3.630).
+# Leading-edge radius: 0.662 per cent c.
+x_percent,y_percent
+0,0
+0.5,0.759
+0.75,0.913
+1.25,1.141
+2.5,1.516
+5.0,2.087
+7.5,2.536
+10,2.917
+15,3.530
+20,4.001
+25,4.363
+30,4.636
+35,4.832
+40,4.953
+45,5.000
+50,4.971
+55,4.865
+60,4.665
+65,4.302
+70,3.787
+75,3.176
+80,2.494
+85,1.773
+90,1.054
+95,0.408
+100,0
