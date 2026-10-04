@@ -1,0 +1,39 @@
+airfoil,quantity,value,uncertainty,reynolds,estimated,checked,source,note
+NACA 2412,a0_per_deg,0.103,0.003,8.9e+06,False,False,"NACA TR 824, p.136","slope through cl = 0.02, 0.23, 0.445, 0.64 at alpha = -2, 0, 2, 4 deg"
+NACA 2412,alpha_0l_deg,-2.2,0.2,8.9e+06,False,False,"NACA TR 824, p.136",lift curve crosses cl = 0
+NACA 2412,cl_max,1.68,0.03,8.9e+06,False,False,"NACA TR 824, p.136",highest diamond symbol; symbols of the three Re overlap at the peak
+NACA 2412,alpha_stall_deg,16.8,1,8.9e+06,False,False,"NACA TR 824, p.136",angle of the highest diamond; overlap makes the angle uncertain
+NACA 2412,cd_min,0.0058,0.0002,8.9e+06,False,False,"NACA TR 824, p.136",bottom of the lowest faired drag curve
+NACA 2412,cl_at_cd_min,0.2,0.1,8.9e+06,False,False,"NACA TR 824, p.136",flat bottom between cl = 0.15 and 0.30
+NACA 2412,cm_c4,-0.04,0.006,8.9e+06,False,False,"NACA TR 824, p.136","lift panel, mean over alpha = -4..6 deg; drag panel gives cm_ac = -0.048"
+NACA 2412,x_ac,0.247,0.0005,8.9e+06,False,False,"NACA TR 824, p.136",printed in the legend for Re = 8.9e6
+NACA 66-210,a0_per_deg,0.106,0.003,9e+06,False,False,"NACA TR 824, p.251","slope through cl = -0.06, 0.15, 0.36, 0.58 at alpha = -2, 0, 2, 4 deg"
+NACA 66-210,alpha_0l_deg,-1.4,0.2,9e+06,False,False,"NACA TR 824, p.251",lift curve crosses cl = 0
+NACA 66-210,cl_max,1.28,0.03,9e+06,False,False,"NACA TR 824, p.251",highest symbol at the peak (highest Re)
+NACA 66-210,alpha_stall_deg,11.3,0.7,9e+06,False,False,"NACA TR 824, p.251",angle of the highest symbol
+NACA 66-210,cd_min,0.0032,0.0002,9e+06,False,False,"NACA TR 824, p.251",bottom of the lowest faired drag curve
+NACA 66-210,cl_at_cd_min,0.2,0.05,9e+06,False,False,"NACA TR 824, p.251",centre of the drag bucket
+NACA 66-210,low_drag_lower,0.08,0.03,9e+06,False,False,"NACA TR 824, p.251",cd = 1.10 cd_min on the lowest faired curve; bucket wall at cl = 0.0
+NACA 66-210,low_drag_upper,0.3,0.03,9e+06,False,False,"NACA TR 824, p.251",cd = 1.10 cd_min on the lowest faired curve; bucket wall at cl = 0.38
+NACA 66-210,cm_c4,-0.039,0.005,9e+06,False,False,"NACA TR 824, p.251","lift panel, mean over alpha = -4..6 deg"
+NACA 66-210,x_ac,0.261,0.0005,9e+06,False,False,"NACA TR 824, p.251",printed in the legend for Re = 9.0e6
+NACA 66(2)-215,alpha_0l_deg,-1.5,0.2,9e+06,False,False,"NACA TR 824, p.255",lift curve crosses cl = 0
+NACA 66(2)-215,cl_max,1.48,0.03,9e+06,False,False,"NACA TR 824, p.255",highest symbol at the peak (highest Re)
+NACA 66(2)-215,alpha_stall_deg,16.2,1,9e+06,False,False,"NACA TR 824, p.255",angle of the highest symbol
+NACA 66(2)-215,cm_c4,-0.032,0.005,9e+06,False,False,"NACA TR 824, p.255","lift panel, mean over alpha = -4..6 deg"
+NACA 66(2)-215,x_ac,0.26,0.0005,9e+06,False,False,"NACA TR 824, p.255",printed in the legend for Re = 9.0e6
+NACA 66(2)-415,alpha_0l_deg,-2.45,0.2,9e+06,False,False,"NACA TR 824, p.256",between cl = 0.05 at alpha = -2 and cl = -0.17 at alpha = -4 deg
+NACA 66(2)-415,cl_max,1.63,0.03,9e+06,False,False,"NACA TR 824, p.256",highest symbol at the peak (highest Re)
+NACA 66(2)-415,alpha_stall_deg,17.3,1,9e+06,False,False,"NACA TR 824, p.256",angle of the highest symbol
+NACA 66(2)-415,cm_c4,-0.072,0.005,9e+06,False,False,"NACA TR 824, p.256","lift panel, mean over alpha = -4..6 deg"
+NACA 66(2)-415,x_ac,0.26,0.0005,9e+06,False,False,"NACA TR 824, p.256",printed in the legend for Re = 9.0e6
+NACA 66-410,a0_per_deg,0.106,0.003,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); copied from base
+NACA 66-410,alpha_0l_deg,-2.35,0.346,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); base + measured camber increment -0.95
+NACA 66-410,cl_max,1.43,0.052,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); base + measured camber increment +0.15
+NACA 66-410,alpha_stall_deg,12.4,1.58,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); base + measured camber increment +1.1
+NACA 66-410,cd_min,0.0032,0.0002,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); copied from base
+NACA 66-410,cl_at_cd_min,0.4,0.05,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); base shifted by Δc_li = +0.20
+NACA 66-410,low_drag_lower,0.28,0.03,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); base shifted by Δc_li = +0.20
+NACA 66-410,low_drag_upper,0.5,0.03,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); base shifted by Δc_li = +0.20
+NACA 66-410,cm_c4,-0.079,0.00866,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); base + measured camber increment -0.04
+NACA 66-410,x_ac,0.261,0.0005,9e+06,True,False,"NACA TR 824, p.251; increment NACA TR 824, p.255 → NACA TR 824, p.256",estimated: NACA 66-210 + (NACA 66(2)-415 − NACA 66(2)-215); copied from base
