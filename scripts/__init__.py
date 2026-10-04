@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 KRGulaj
+# Created: 2026-10-04
+"""Runnable steps. Start each one from the repo root: `python -m scripts.<name>`."""

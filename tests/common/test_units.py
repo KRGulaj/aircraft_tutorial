@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from aircraft_tutorial.units import kg_to_lb, kmh_to_ms, lb_to_kg, m2_to_ft2
+from aircraft_tutorial.common.units import kg_to_lb, kmh_to_ms, lb_to_kg, m2_to_ft2
 
 
 def test_kg_to_lb_mtow_matches_exact_definition() -> None:
