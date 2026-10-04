@@ -10,7 +10,7 @@ airfoil = "NACA 66(2)-215"
 source = "NACA TR 824, p.255"
 reynolds = 9.0e6
 design_cl = 0.2
-checked = false
+checked = true
 
 [values.alpha_0l_deg]
 value = -1.5
