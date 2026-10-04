@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Mateusz Suszynski
+# Created: 2026-10-04
+#
+# Task 1c: twist sizing of WING-1 and WING-2 on the simplified trapezoidal planform of task 1b.
+# Values marked "brief" are from the B747-8 table of the assignment. Paths are relative to
+# this file.
+
+[aircraft]
+design_mass_kg = 380000.0       # brief: W_des, design/cruise weight
+
+[planform]
+# Trapezoid with the span, area, root chord and quarter-chord sweep of the B747-8 (task 1b);
+# the taper ratio follows from S = b/2 · c_r · (1 + λ).
+span_m = 68.40                  # brief
+area_m2 = 554.0                 # brief
+root_chord_m = 14.63            # brief
+sweep_quarter_chord_deg = 37.5  # brief
+dihedral_deg = 0.0              # not in the brief; a flat wing, it barely changes CL in a VLM
+
+[cruise]
+mach = 0.855                    # brief
+altitude_m = 10668.0            # brief: 35 000 ft
+
+[twist]
+root_incidence_deg = 4.0        # brief: fixed by the fuselage
+max_twist_deg = 6.0             # brief: largest allowed |tip twist − root twist|
+cl_tolerance = 1.0e-4           # stop when |CL − CL_des| at zero body angle is below this
+max_iter = 6                    # secant steps after the two starting runs
+
+[vlm]
+segments = 12                   # spanwise segments, half-cosine spaced towards the tip; OpenVSP
+                                # lofts each one linearly, so the twist is linear only across
+                                # segment boundaries (one segment: -0.58 deg at mid-span for -6 at the tip)
+segment_tess = 3                # sections per segment, ends included: 12 x 2 = 24 strips
+chord_tess = 33                 # chordwise points (B12 value)
+wake_iter = 5
+n_cpu = 4
+alpha_start_deg = -4.0          # body angle of attack; the root incidence comes on top
+alpha_end_deg = 10.0
+alpha_npts = 15                 # 1 deg step, so 0 deg (the trim point) is a computed point
+
+[drag]
+# CD = CDi (VSPAERO, Trefftz plane) + CD_profile (XFoil polar, strip by strip) + CD_wave (Korn + ADSEE)
+korn_sweep_chord_fraction = 0.5          # half-chord sweep in the swept Korn equation
+# strip cd is scaled from the polar's Re to the strip's by the Prandtl-Schlichting turbulent
+# flat-plate law, c_f = 0.455 / (log10 Re)^2.58 (wing/profile_drag.py)
+sweep_drag_mode = "friction"             # cd = cd_n: skin friction is not reduced by sweep (baseline)
+sensitivity_sweep_drag_mode = "cos3"     # cd = cd_n cos^3: pure simple sweep theory (optimistic)
+
+# polar: XFoil polar at the sweep-normal cruise condition of the MAC (M_n = 0.678,
+# Re_n = 4.165e7, see results/wing/twist_summary.md), written by section.polar.write_csv.
+# kappa_a: Korn technology factor, 0.87 conventional / 0.95 supercritical.
+
+[[wing]]
+name = "WING-1"
+airfoil = "../airfoils/NACA2412.dat"        # task 1a: selected NACA four-digit section
+polar = "../results/section/cruise/NACA2412.csv"
+kappa_a = 0.87                              # conventional section
+
+[[wing]]
+name = "WING-2"
+airfoil = "../airfoils/NACA66-410_gen.dat"  # task 1a: NACA 6-series section, same file as section.toml
+polar = "../results/section/cruise/NACA66-410.csv"
+kappa_a = 0.87                              # conventional section (not supercritical)
