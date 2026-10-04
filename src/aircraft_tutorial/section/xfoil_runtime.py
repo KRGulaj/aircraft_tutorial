@@ -3,11 +3,10 @@
 # Created: 2026-10-04
 """XFoil runtime: process setup, one configured session per run, and the polar sweep.
 
-The XFoil Python binding is the patched xfoil-python build from
-system_design/externals/xfoil-python. Its `XFoil.a(alpha)` returns
-(cl, cd, cm, cp_min, diverged, rms_bl): `diverged` is True only if the boundary-layer Newton
-solve stopped on a NaN, and `rms_bl` is the final RMS residual of that system. A point that ran
-out of iterations is therefore distinguishable from one that blew up.
+The XFoil Python binding is the patched xfoil-python build from externals/xfoil-python. Its
+`XFoil.a(alpha)` returns (cl, cd, cm, cp_min, diverged, rms_bl): `diverged` is True only if the
+boundary-layer Newton solve stopped on a NaN, and `rms_bl` is the final RMS residual of that
+system. A point that ran out of iterations is therefore distinguishable from one that blew up.
 
 Every XFoil call in this package goes through this module, so the process setup below always
 runs before the binding is imported.
