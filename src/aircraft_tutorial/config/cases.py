@@ -37,6 +37,13 @@ Expected layout::
     name = "NACA 2412"
     file = "../airfoils/NACA2412.dat"
     drag_bucket = false
+
+    [[extra_run]]                  # optional: polars only, at another condition
+    label = "3d_input"
+    reynolds = 4.17e7
+    mach = 0.1
+    ncrit = 10.0
+    output = "../results/3d_input"
 """
 
 from __future__ import annotations
@@ -140,6 +147,21 @@ class AirfoilEntry:
 
 
 @dataclass(frozen=True)
+class ExtraRun:
+    """Polars of every airfoil at another flow condition, written to their own folder.
+
+    Attributes:
+        label: Short name of the run.
+        conditions: Flow condition.
+        output: Absolute output folder.
+    """
+
+    label: str
+    conditions: FlowConditions
+    output: Path
+
+
+@dataclass(frozen=True)
 class SectionCase:
     """Complete run definition of the section analysis."""
 
@@ -148,6 +170,7 @@ class SectionCase:
     metrics: MetricSettings
     sensitivity: SensitivitySettings
     airfoils: tuple[AirfoilEntry, ...]
+    extra_runs: tuple[ExtraRun, ...]
 
 
 def load_section_case(path: Path) -> SectionCase:
@@ -174,18 +197,41 @@ def load_section_case(path: Path) -> SectionCase:
         metrics=_metrics(_table(raw, "metrics")),
         sensitivity=_sensitivity(_table(raw, "sensitivity")),
         airfoils=_airfoils(raw, base),
+        extra_runs=_extra_runs(raw, base),
     )
 
 
-def _conditions(t: dict[str, object]) -> FlowConditions:
-    """Validate the [conditions] table."""
-    reynolds = _float(t, "conditions.reynolds")
-    mach = _float(t, "conditions.mach")
-    ncrit = _float(t, "conditions.ncrit")
-    _require(reynolds > 0.0, "conditions.reynolds", reynolds, "must be > 0")
-    _require(0.0 <= mach < 1.0, "conditions.mach", mach, "must be in [0, 1)")
-    _require(ncrit > 0.0, "conditions.ncrit", ncrit, "must be > 0")
+def _conditions(t: dict[str, object], prefix: str = "conditions") -> FlowConditions:
+    """Validate a flow condition (reynolds, mach, ncrit)."""
+    reynolds = _float(t, f"{prefix}.reynolds")
+    mach = _float(t, f"{prefix}.mach")
+    ncrit = _float(t, f"{prefix}.ncrit")
+    _require(reynolds > 0.0, f"{prefix}.reynolds", reynolds, "must be > 0")
+    _require(0.0 <= mach < 1.0, f"{prefix}.mach", mach, "must be in [0, 1)")
+    _require(ncrit > 0.0, f"{prefix}.ncrit", ncrit, "must be > 0")
     return FlowConditions(reynolds=reynolds, mach=mach, ncrit=ncrit)
+
+
+def _extra_runs(raw: dict[str, object], base: Path) -> tuple[ExtraRun, ...]:
+    """Validate the optional [[extra_run]] array."""
+    entries = raw.get("extra_run", [])
+    if not isinstance(entries, list):
+        raise CaseError(f"[[extra_run]]: must be an array of tables, got {entries!r}")
+    runs: list[ExtraRun] = []
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise CaseError(f"extra_run[{i}]: must be a table, got {entry!r}")
+        label, output = entry.get("label"), entry.get("output")
+        if not isinstance(label, str) or not label.strip():
+            raise CaseError(f"extra_run[{i}].label: must be a non-empty string, got {label!r}")
+        if not isinstance(output, str) or not output.strip():
+            raise CaseError(f"extra_run[{i}].output: must be a non-empty string, got {output!r}")
+        runs.append(ExtraRun(label, _conditions(entry, f"extra_run[{i}]"),
+                             (base / output).resolve()))
+    labels = [r.label for r in runs]
+    if len(set(labels)) != len(labels):
+        raise CaseError(f"[[extra_run]]: labels must be unique, got {labels}")
+    return tuple(runs)
 
 
 def _xfoil(t: dict[str, object]) -> XfoilSettings:

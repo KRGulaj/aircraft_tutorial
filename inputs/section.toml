@@ -37,3 +37,13 @@ drag_bucket = false   # 4-digit: no laminar low-drag range
 name = "NACA 66-410"
 file = "../airfoils/NACA66-410_gen.dat"
 drag_bucket = true
+
+# Profile-drag polars for the 3D stage: flight Reynolds number, low Mach number. XFoil's
+# Karman-Tsien correction is not valid at the cruise normal Mach number (0.68), so
+# compressibility is handled in the 3D stage.
+[[extra_run]]
+label = "3d_input"
+reynolds = 4.17e7
+mach = 0.1
+ncrit = 10.0
+output = "../results/3d_input"

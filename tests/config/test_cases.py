@@ -45,6 +45,13 @@ drag_bucket = false
 name = "NACA 66-410"
 file = "../airfoils/b.dat"
 drag_bucket = true
+
+[[extra_run]]
+label = "3d_input"
+reynolds = 4.17e7
+mach = 0.1
+ncrit = 10.0
+output = "../results/3d_input"
 """
 
 
@@ -70,6 +77,9 @@ def test_load_section_case_valid_file_returns_every_value(tmp_path: Path) -> Non
     assert case.metrics.low_drag_factor == 0.13
     assert case.metrics.spread_windows_deg == ((-2.5, 3.5), (-6.5, 8.5))
     assert [a.drag_bucket for a in case.airfoils] == [False, True]
+    assert case.extra_runs[0].label == "3d_input"
+    assert case.extra_runs[0].conditions.reynolds == 4.17e7
+    assert case.extra_runs[0].output == (tmp_path / "results" / "3d_input").resolve()
     assert case.sensitivity.panel_nodes == (100, 160, 240, 320)
     assert [a.name for a in case.airfoils] == ["NACA 2412", "NACA 66-410"]
     assert case.airfoils[1].path == (tmp_path / "airfoils" / "b.dat").resolve()
@@ -93,12 +103,14 @@ def test_load_section_case_valid_file_returns_every_value(tmp_path: Path) -> Non
         ('name = "NACA 66-410"', 'name = "NACA 2412"', "unique"),
         ("drag_bucket = true", 'drag_bucket = "yes"', "airfoil[1].drag_bucket"),
         ("[[-2.5, 3.5], [-6.5, 8.5]]", "[[3.5, -2.5]]", "metrics.spread_windows_deg"),
+        ("reynolds = 4.17e7", "reynolds = 0.0", "extra_run[0].reynolds"),
+        ('label = "3d_input"', "", "extra_run[0].label"),
     ],
     ids=[
         "missing_key", "negative_re", "nan_mach", "supersonic", "too_many_nodes",
         "float_nodes", "bool_as_int", "alpha_range_without_zero", "zero_k",
         "empty_list", "too_few_nodes", "missing_file", "duplicate_name", "bucket_not_bool",
-        "reversed_window",
+        "reversed_window", "extra_zero_re", "extra_no_label",
     ],
 )
 def test_load_section_case_invalid_value_raises_naming_key(
@@ -110,6 +122,15 @@ def test_load_section_case_invalid_value_raises_naming_key(
 
     with pytest.raises(CaseError, match=re.escape(fragment)):
         load_section_case(path)
+
+
+def test_load_section_case_without_extra_run_is_empty(tmp_path: Path) -> None:
+    """[[extra_run]] is optional."""
+    text = VALID[: VALID.index("[[extra_run]]")]
+
+    case = load_section_case(_write_case(tmp_path, text))
+
+    assert case.extra_runs == ()
 
 
 def test_load_section_case_unparsable_file_raises(tmp_path: Path) -> None:
