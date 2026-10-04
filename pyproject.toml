@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 KRGulaj
+# Created: 2026-10-04
+
+[project]
+name = "aircraft_tutorial"
+version = "0.1.0"
+description = "AE2111-II aircraft tutorial: B747-8 wing re-design calculations"
+requires-python = ">=3.13"
+license = "GPL-3.0-or-later"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.13"
+files = ["src", "tests"]
+mypy_path = "src"
+strict = true
+ignore_missing_imports = true
+warn_unused_ignores = true

@@ -1,0 +1,18 @@
+{
+  // SPDX-License-Identifier: GPL-3.0-or-later
+  // Copyright (C) 2026 KRGulaj
+  // Created: 2026-10-04
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: current file (aircraft_tutorial)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${env:USERPROFILE}\.conda\envs\aircraft_tutorial\python.exe",
+      "env": { "PYTHONPATH": "${workspaceFolder}\src" }
+    }
+  ]
+}

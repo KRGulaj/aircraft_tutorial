@@ -1,0 +1,49 @@
+{
+  // SPDX-License-Identifier: GPL-3.0-or-later
+  // Copyright (C) 2026 KRGulaj
+  // Created: 2026-10-04
+
+  // --- Python interpreter -------------------------------------------------
+  // conda is not on PATH. The extension gets the conda path explicitly.
+  // `${env:USERPROFILE}` keeps the path valid on every machine.
+  "python.condaPath": "C:\ProgramData\miniforge3\Scripts\conda.exe",
+  "python.defaultInterpreterPath": "${env:USERPROFILE}\.conda\envs\aircraft_tutorial\python.exe",
+  // The terminal profile below activates the env once, at shell start.
+  // If the extensions also activate, they type a second `conda activate`.
+  "python.terminal.activateEnvironment": false,
+  "python-envs.defaultEnvManager": "ms-python.python:conda",
+  "python-envs.defaultPackageManager": "ms-python.python:conda",
+  "python-envs.terminal.autoActivationType": "off",
+
+  // --- Terminal -----------------------------------------------------------
+  // Windows PowerShell 5.1 has the conda hook in profile.ps1.
+  "terminal.integrated.profiles.windows": {
+    "PowerShell (aircraft_tutorial)": {
+      "source": "PowerShell",
+      "args": ["-NoExit", "-Command", "conda activate aircraft_tutorial"]
+    }
+  },
+  "terminal.integrated.defaultProfile.windows": "PowerShell (aircraft_tutorial)",
+
+  // --- Run / debug --------------------------------------------------------
+  // `$pythonPath` is the interpreter that the Python extension selected.
+  "code-runner.runInTerminal": true,
+  "code-runner.executorMap": {
+    "python": "$pythonPath -u"
+  },
+
+  // --- Analysis and tests -------------------------------------------------
+  "python.analysis.extraPaths": ["src"],
+  "python.analysis.typeCheckingMode": "strict",
+  "mypy-type-checker.args": ["--config-file=pyproject.toml"],
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"],
+
+  // --- Exclusions ---------------------------------------------------------
+  "files.watcherExclude": {
+    "**/.pytest_cache/**": true,
+    "**/.mypy_cache/**": true,
+    "**/.ruff_cache/**": true
+  }
+}

@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 KRGulaj
+# Created: 2026-10-04
+
+# local agent instructions, not part of the deliverable
+CLAUDE.md
+.claude/
+
+# assignment brief and report drafts
+docs/reports/
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+output/
+*.log
+.env
