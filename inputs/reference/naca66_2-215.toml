@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 KRGulaj
+# Created: 2026-10-04
+#
+# Values read from NACA TR 824, printed p.255, Re = 9.0e6 (diamond symbols).
+# Lower section of the camber calibration pair (15 % thick, design cl 0.2).
+# checked = true only after the group has checked every value against the page.
+
+airfoil = "NACA 66(2)-215"
+source = "NACA TR 824, p.255"
+reynolds = 9.0e6
+design_cl = 0.2
+checked = false
+
+[values.alpha_0l_deg]
+value = -1.5
+uncertainty = 0.2
+note = "lift curve crosses cl = 0"
+
+[values.cl_max]
+value = 1.48
+uncertainty = 0.03
+note = "highest symbol at the peak (highest Re)"
+
+[values.alpha_stall_deg]
+value = 16.2
+uncertainty = 1.0
+note = "angle of the highest symbol"
+
+[values.cm_c4]
+value = -0.032
+uncertainty = 0.005
+note = "lift panel, mean over alpha = -4..6 deg"
+
+[values.x_ac]
+value = 0.260
+uncertainty = 0.0005
+note = "printed in the legend for Re = 9.0e6"

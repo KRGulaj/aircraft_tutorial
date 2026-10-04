@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 KRGulaj
+# Created: 2026-10-04
+#
+# Values read from NACA TR 824, printed p.136, Re = 8.9e6 (diamond symbols).
+# Read on calibrated zooms of the 200 dpi scan, each against the nearest grid line.
+# checked = true only after the group has checked every value against the page.
+
+airfoil = "NACA 2412"
+source = "NACA TR 824, p.136"
+reynolds = 8.9e6
+design_cl = nan
+checked = false
+
+[values.a0_per_deg]
+value = 0.103
+uncertainty = 0.003
+note = "slope through cl = 0.02, 0.23, 0.445, 0.64 at alpha = -2, 0, 2, 4 deg"
+
+[values.alpha_0l_deg]
+value = -2.2
+uncertainty = 0.2
+note = "lift curve crosses cl = 0"
+
+[values.cl_max]
+value = 1.68
+uncertainty = 0.03
+note = "highest diamond symbol; symbols of the three Re overlap at the peak"
+
+[values.alpha_stall_deg]
+value = 16.8
+uncertainty = 1.0
+note = "angle of the highest diamond; overlap makes the angle uncertain"
+
+[values.cd_min]
+value = 0.0058
+uncertainty = 0.0002
+note = "bottom of the lowest faired drag curve"
+
+[values.cl_at_cd_min]
+value = 0.2
+uncertainty = 0.1
+note = "flat bottom between cl = 0.15 and 0.30"
+
+[values.cm_c4]
+value = -0.040
+uncertainty = 0.006
+note = "lift panel, mean over alpha = -4..6 deg; drag panel gives cm_ac = -0.048"
+
+[values.x_ac]
+value = 0.247
+uncertainty = 0.0005
+note = "printed in the legend for Re = 8.9e6"

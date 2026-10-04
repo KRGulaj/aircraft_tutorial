@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 KRGulaj
+# Created: 2026-10-04
+#
+# Values read from NACA TR 824, printed p.251, Re = 9.0e6 (diamond symbols).
+# Base section of the NACA 66-410 estimate (same 10 % thickness, design cl 0.2).
+# checked = true only after the group has checked every value against the page.
+
+airfoil = "NACA 66-210"
+source = "NACA TR 824, p.251"
+reynolds = 9.0e6
+design_cl = 0.2
+checked = false
+
+[values.a0_per_deg]
+value = 0.106
+uncertainty = 0.003
+note = "slope through cl = -0.06, 0.15, 0.36, 0.58 at alpha = -2, 0, 2, 4 deg"
+
+[values.alpha_0l_deg]
+value = -1.4
+uncertainty = 0.2
+note = "lift curve crosses cl = 0"
+
+[values.cl_max]
+value = 1.28
+uncertainty = 0.03
+note = "highest symbol at the peak (highest Re)"
+
+[values.alpha_stall_deg]
+value = 11.3
+uncertainty = 0.7
+note = "angle of the highest symbol"
+
+[values.cd_min]
+value = 0.0032
+uncertainty = 0.0002
+note = "bottom of the lowest faired drag curve"
+
+[values.cl_at_cd_min]
+value = 0.2
+uncertainty = 0.05
+note = "centre of the drag bucket"
+
+[values.low_drag_lower]
+value = 0.08
+uncertainty = 0.03
+note = "cd = 1.10 cd_min on the lowest faired curve; bucket wall at cl = 0.0"
+
+[values.low_drag_upper]
+value = 0.30
+uncertainty = 0.03
+note = "cd = 1.10 cd_min on the lowest faired curve; bucket wall at cl = 0.38"
+
+[values.cm_c4]
+value = -0.039
+uncertainty = 0.005
+note = "lift panel, mean over alpha = -4..6 deg"
+
+[values.x_ac]
+value = 0.261
+uncertainty = 0.0005
+note = "printed in the legend for Re = 9.0e6"
