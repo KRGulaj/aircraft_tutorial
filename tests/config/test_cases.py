@@ -52,6 +52,7 @@ reynolds = 4.17e7
 mach = 0.1
 ncrit = 10.0
 output = "../results/3d_input"
+report_low_drag = false
 """
 
 
@@ -80,6 +81,7 @@ def test_load_section_case_valid_file_returns_every_value(tmp_path: Path) -> Non
     assert case.extra_runs[0].label == "3d_input"
     assert case.extra_runs[0].conditions.reynolds == 4.17e7
     assert case.extra_runs[0].output == (tmp_path / "results" / "3d_input").resolve()
+    assert case.extra_runs[0].report_low_drag is False
     assert case.sensitivity.panel_nodes == (100, 160, 240, 320)
     assert [a.name for a in case.airfoils] == ["NACA 2412", "NACA 66-410"]
     assert case.airfoils[1].path == (tmp_path / "airfoils" / "b.dat").resolve()
@@ -105,12 +107,13 @@ def test_load_section_case_valid_file_returns_every_value(tmp_path: Path) -> Non
         ("[[-2.5, 3.5], [-6.5, 8.5]]", "[[3.5, -2.5]]", "metrics.spread_windows_deg"),
         ("reynolds = 4.17e7", "reynolds = 0.0", "extra_run[0].reynolds"),
         ('label = "3d_input"', "", "extra_run[0].label"),
+        ("report_low_drag = false", "", "extra_run[0].report_low_drag"),
     ],
     ids=[
         "missing_key", "negative_re", "nan_mach", "supersonic", "too_many_nodes",
         "float_nodes", "bool_as_int", "alpha_range_without_zero", "zero_k",
         "empty_list", "too_few_nodes", "missing_file", "duplicate_name", "bucket_not_bool",
-        "reversed_window", "extra_zero_re", "extra_no_label",
+        "reversed_window", "extra_zero_re", "extra_no_label", "extra_no_low_drag_flag",
     ],
 )
 def test_load_section_case_invalid_value_raises_naming_key(

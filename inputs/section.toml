@@ -14,7 +14,7 @@ ncrit = 10.0          # e^N: N = -8.43 - 2.4 ln(Tu) gives 9.8-11.0 for the LTPT 
 panel_nodes = 240     # 160 (XFoil default) failed the 1 % check for 66-410; see sensitivity
 max_iter = 200
 alpha_low_deg = -8.0
-alpha_high_deg = 22.0 # past the tunnel stall angles (about 16 deg for 2412)
+alpha_high_deg = 26.0 # past stall at tunnel Re (16-19 deg) and at flight Re (about 21 deg)
 alpha_step_deg = 0.25
 stop_after_failures = 8
 
@@ -38,12 +38,16 @@ name = "NACA 66-410"
 file = "../airfoils/NACA66-410_gen.dat"
 drag_bucket = true
 
-# Profile-drag polars for the 3D stage: flight Reynolds number, low Mach number. XFoil's
-# Karman-Tsien correction is not valid at the cruise normal Mach number (0.68), so
-# compressibility is handled in the 3D stage.
+# Polars for the 3D stage (group decision): normal-plane Reynolds number at cruise,
+#   Re_n = rho V c_MAC / mu * cos^2(sweep_c/4)
+#        = 0.37960 * 253.54 * 9.855 / 1.4334e-5 * cos^2(37.5 deg) = 6.617e7 * 0.6294 = 4.165e7,
+# at low Mach number: XFoil's Karman-Tsien correction is not valid at the cruise normal Mach
+# number (0.68), so compressibility is corrected in the 3D tool (VSP). At this Reynolds number
+# the 66-410 has no laminar drag bucket (cd_min at cl = 0.03), so no low-drag range is reported.
 [[extra_run]]
 label = "3d_input"
 reynolds = 4.17e7
 mach = 0.1
 ncrit = 10.0
 output = "../results/3d_input"
+report_low_drag = false

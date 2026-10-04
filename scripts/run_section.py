@@ -10,7 +10,8 @@ Reads inputs/section.toml and writes:
 - results/section/metrics.csv               characteristics of all airfoils side by side
 - results/section/sensitivity.csv           one-at-a-time panel-node and Ncrit cases
 - results/section/panel_check.csv           production nodes vs finest nodes, accepted or not
-- <extra_run.output>/<airfoil>_polar.csv    polars of every [[extra_run]] condition
+- <extra_run.output>/<airfoil>_polar.csv    polar at every [[extra_run]] condition
+- <extra_run.output>/<airfoil>_metrics.csv  its characteristics
 
 Run from the repo root: python -m scripts.run_section
 """
@@ -145,14 +146,19 @@ def _panel_check(case: SectionCase, rows: list[dict[str, str]]) -> list[dict[str
 
 
 def _extra_runs(case: SectionCase, sections: dict[str, Airfoil]) -> None:
-    """Polars of every airfoil at every [[extra_run]] condition."""
+    """Polar and characteristics of every airfoil at every [[extra_run]] condition."""
     for run in case.extra_runs:
         run.output.mkdir(parents=True, exist_ok=True)
         for entry in case.airfoils:
             polar = run_polar(sections[entry.name], run.conditions, case.xfoil)
-            write_csv(polar, run.output / f"{slug(entry.name)}_polar.csv")
-            logger.info("%s %s: %d/%d points converged", run.label, entry.name,
-                        int(polar.converged.sum()), polar.converged.size)
+            stem = slug(entry.name)
+            write_csv(polar, run.output / f"{stem}_polar.csv")
+            m = compute_metrics(polar, case.metrics, entry.drag_bucket and run.report_low_drag)
+            _write_rows(run.output / f"{stem}_metrics.csv", [
+                {"quantity": q, "value": f"{v:.6g}", "unit": u} for q, v, u in metrics_table(m)])
+            logger.info("%s %s: %d/%d points converged, stall detected: %s", run.label,
+                        entry.name, int(polar.converged.sum()), polar.converged.size,
+                        m.stall.detected)
 
 
 def _write_rows(path: Path, rows: list[dict[str, str]]) -> None:

@@ -83,14 +83,15 @@ src/aircraft_tutorial/
   config/                 input loading and validation
   geometry/               airfoil geometry
   section/                2D section analysis (XFoil)
-  contracts/              data passed between stages
   plots/                  figures
 results/                  generated data and figures, one folder per stage
+  3d_input/               2D polars and characteristics (CSV) for the 3D stage
 tests/                    pytest suite, mirrors src/
 ```
 
-A stage package never imports another stage package. Data passes between stages through
-`contracts/` only. A package is created when it gets its first module.
+A stage package never imports another stage package. Data passes between stages as files:
+the 3D stage reads the CSVs in `results/3d_input/`. A package is created when it gets its
+first module.
 
 ## Checks
 

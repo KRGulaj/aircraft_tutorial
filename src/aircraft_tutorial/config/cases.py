@@ -44,6 +44,7 @@ Expected layout::
     mach = 0.1
     ncrit = 10.0
     output = "../results/3d_input"
+    report_low_drag = false
 """
 
 from __future__ import annotations
@@ -154,11 +155,14 @@ class ExtraRun:
         label: Short name of the run.
         conditions: Flow condition.
         output: Absolute output folder.
+        report_low_drag: False if no laminar low-drag range exists at this condition, even for
+            a section that has one at the production condition.
     """
 
     label: str
     conditions: FlowConditions
     output: Path
+    report_low_drag: bool
 
 
 @dataclass(frozen=True)
@@ -226,8 +230,12 @@ def _extra_runs(raw: dict[str, object], base: Path) -> tuple[ExtraRun, ...]:
             raise CaseError(f"extra_run[{i}].label: must be a non-empty string, got {label!r}")
         if not isinstance(output, str) or not output.strip():
             raise CaseError(f"extra_run[{i}].output: must be a non-empty string, got {output!r}")
+        low_drag = entry.get("report_low_drag")
+        if not isinstance(low_drag, bool):
+            raise CaseError(f"extra_run[{i}].report_low_drag: must be true or false, "
+                            f"got {low_drag!r}")
         runs.append(ExtraRun(label, _conditions(entry, f"extra_run[{i}]"),
-                             (base / output).resolve()))
+                             (base / output).resolve(), low_drag))
     labels = [r.label for r in runs]
     if len(set(labels)) != len(labels):
         raise CaseError(f"[[extra_run]]: labels must be unique, got {labels}")

@@ -9,7 +9,10 @@ results/section/figures/:
 - <airfoil>_polar.png       cl–α, drag polar, cm–α with the key values
 - overlay_polar.png         both airfoils in one 3-panel figure
 - sections.png              section shapes at true aspect ratio
-- <label>_drag_polars.png   drag polars of each [[extra_run]] condition
+and, for each [[extra_run]], to its own output folder:
+
+- <airfoil>_polar.png       cl–α, drag polar, cm–α with the key values
+- drag_polars.png           drag polars of every airfoil
 
 Run from the repo root after scripts.run_section: python -m scripts.make_section_plots
 """
@@ -54,7 +57,12 @@ def main() -> None:
     for run in case.extra_runs:
         extra = {a.name: read_csv(run.output / f"{slug(a.name)}_polar.csv")
                  for a in case.airfoils}
-        plots.plot_drag_polars(extra, colours, FIGURES / f"{run.label}_drag_polars.png")
+        for entry in case.airfoils:
+            m = compute_metrics(extra[entry.name], case.metrics,
+                                entry.drag_bucket and run.report_low_drag)
+            plots.plot_polar_panels(extra[entry.name], m, colours[entry.name], window,
+                                    run.output / f"{slug(entry.name)}_polar.png")
+        plots.plot_drag_polars(extra, colours, run.output / "drag_polars.png")
 
 
 if __name__ == "__main__":
