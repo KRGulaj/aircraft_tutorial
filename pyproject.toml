@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 name = "aircraft_tutorial"
 version = "0.1.0"
 description = "AE2111-II aircraft tutorial: B747-8 wing re-design calculations"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
 
 [tool.setuptools.packages.find]
@@ -25,7 +25,7 @@ addopts = "-ra --import-mode=importlib"
 pythonpath = ["src", "."]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.11"
 files = ["src", "scripts", "tests"]
 mypy_path = "src"
 strict = true

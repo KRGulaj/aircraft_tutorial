@@ -17,8 +17,11 @@ The subject is a wing re-design of the Boeing 747-8:
 
 ```
 C:\ProgramData\miniforge3\Scripts\conda.exe env create -f environment.yml
-"$USERPROFILE/.conda/envs/aircraft_tutorial/python.exe" -m pip install ../system_design/externals/xfoil-python
+"$USERPROFILE/.conda/envs/aircraft_tutorial/python.exe" -m pip install --no-build-isolation ../system_design/externals/xfoil-python
 ```
+
+The XFoil build needs MSYS2 `mingw64in` and CMake first on `PATH`; the steps are in
+`system_design/wp2/README.md`.
 
 Install the package in editable mode, once:
 
