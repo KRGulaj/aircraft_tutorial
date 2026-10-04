@@ -1,0 +1,21 @@
+quantity,unit,NACA 2412,NACA 66-410
+a0_per_deg,1/deg,0.113762,0.108292
+a0_per_rad,1/rad,6.51806,6.2047
+a0_min_per_deg,1/deg,0.113762,0.105825
+a0_max_per_deg,1/deg,0.114518,0.108992
+lift_fit_r_squared,-,0.999792,0.999488
+alpha_0l_deg,deg,-2.17893,-3.36898
+alpha_0l_min_deg,deg,-2.18558,-3.49995
+alpha_0l_max_deg,deg,-2.15762,-3.30672
+cl_max,-,1.90955,1.77572
+alpha_stall_deg,deg,18.75,16.75
+stall_detected,bool,1,1
+cd_min,-,0.00502944,0.00290818
+cl_at_cd_min,-,0.338257,0.408138
+cm_c4,-,-0.0528776,-0.0877696
+x_ac,chord,0.249831,0.249885
+ld_max,-,134.628,144.28
+cl_at_ld_max,-,1.09249,0.43525
+alpha_at_ld_max_deg,deg,7.5,0.5
+low_drag_lower,-,,0.38123
+low_drag_upper,-,,0.442659
