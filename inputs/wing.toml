@@ -62,18 +62,19 @@ eta = 0.95                               # lecture: airfoil efficiency factor
 # Group decision: Re_n of the MAC at cruise (4.17e7) but M = 0.1, because XFoil's Karman-Tsien
 # correction is not valid at the cruise normal Mach number 0.68; compressibility enters on the 3D
 # side (VSPAERO Prandtl-Glauert for lift, Korn + ADSEE for wave drag).
-# kappa_a: Korn technology factor, 0.87 conventional / 0.95 supercritical.
+# kappa_a: Korn technology factor (lecture): 0.80 NACA 4-series, 0.87 conventional (6-series),
+# 0.95 supercritical.
 
 [[wing]]
 name = "WING-1"
 airfoil = "../airfoils/NACA2412.dat"        # task 1a: selected NACA four-digit section
 polar = "../results/3d_input/naca2412_polar.csv"
 metrics = "../results/3d_input/naca2412_metrics.csv"
-kappa_a = 0.87                              # conventional section
+kappa_a = 0.80                              # lecture: NACA 4-series
 
 [[wing]]
 name = "WING-2"
 airfoil = "../airfoils/NACA66-410_gen.dat"  # task 1a: NACA 6-series section, same file as section.toml
 polar = "../results/3d_input/naca66-410_polar.csv"
 metrics = "../results/3d_input/naca66-410_metrics.csv"
-kappa_a = 0.87                              # conventional section (not supercritical)
+kappa_a = 0.87                              # conventional section (6-series, not supercritical)

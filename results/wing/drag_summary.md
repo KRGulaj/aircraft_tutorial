@@ -12,12 +12,12 @@ CD = CDi (VSPAERO, Trefftz plane) + CD_profile (XFoil polar, strip by strip) + C
 
 | Wing | File | Section | Re | M | Ncrit | c_ref [m] | usable cl_n | t/c | κ_A | points with cp_min < Cp* |
 |---|---|---|---|---|---|---|---|---|---|---|
-| WING-1 | naca2412_polar.csv | NACA 2412 | 4.1700e+07 | 0.1 | 10.0 | 9.867 | -0.683 … 2.142 | 0.1200 | 0.87 | n/a (polar at M = 0.1) |
+| WING-1 | naca2412_polar.csv | NACA 2412 | 4.1700e+07 | 0.1 | 10.0 | 9.867 | -0.683 … 2.142 | 0.1200 | 0.8 | n/a (polar at M = 0.1) |
 | WING-2 | naca66-410_polar.csv | NACA 66-410 | 4.1700e+07 | 0.1 | 10.0 | 9.867 | -0.535 … 2.044 | 0.1000 | 0.87 | n/a (polar at M = 0.1) |
 
 ## Trim point (CL = CL_des = 0.5513)
 
 | Wing | α_trim [deg] | CDi | CD_profile | CD_wave | M_dd | CD | L/D | CD (cos3) | L/D (cos3) |
 |---|---|---|---|---|---|---|---|---|---|
-| WING-1 | +0.000 | 0.01200 | 0.00642 | 0.02074 | 0.7776 | 0.03917 | 14.08 | 0.03595 | 15.34 |
+| WING-1 | +0.000 | 0.01200 | 0.00642 | 0.07384 | 0.6932 | 0.09226 | 5.98 | 0.08904 | 6.19 |
 | WING-2 | +0.000 | 0.01189 | 0.00599 | 0.01086 | 0.8066 | 0.02874 | 19.19 | 0.02574 | 21.42 |
