@@ -335,6 +335,43 @@ def compute_metrics(polar: Polar, settings: MetricSettings, drag_bucket: bool) -
     )
 
 
+def metrics_table(m: SectionMetrics) -> list[tuple[str, float, str]]:
+    """Flat (quantity, value, unit) rows of the characteristics, for tables and CSV.
+
+    Args:
+        m: Characteristics of one polar.
+
+    Returns:
+        Rows in a fixed order. The low-drag range rows are absent if m.low_drag is None.
+    """
+    rows = [
+        ("a0_per_deg", m.a0_per_deg, "1/deg"),
+        ("a0_per_rad", m.a0_per_rad, "1/rad"),
+        ("a0_min_per_deg", m.spread.a0_min_per_deg, "1/deg"),
+        ("a0_max_per_deg", m.spread.a0_max_per_deg, "1/deg"),
+        ("lift_fit_r_squared", m.lift_fit.r_squared, "-"),
+        ("alpha_0l_deg", m.alpha_0l_deg, "deg"),
+        ("alpha_0l_min_deg", m.spread.alpha_0l_min_deg, "deg"),
+        ("alpha_0l_max_deg", m.spread.alpha_0l_max_deg, "deg"),
+        ("cl_max", m.stall.cl_max, "-"),
+        ("alpha_stall_deg", m.stall.alpha_deg, "deg"),
+        ("stall_detected", float(m.stall.detected), "bool"),
+        ("cd_min", m.cd_min, "-"),
+        ("cl_at_cd_min", m.cl_at_cd_min, "-"),
+    ]
+    if m.low_drag is not None:
+        rows += [("low_drag_lower", m.low_drag.cl_lower, "-"),
+                 ("low_drag_upper", m.low_drag.cl_upper, "-")]
+    rows += [
+        ("cm_c4", m.cm_c4, "-"),
+        ("x_ac", m.x_ac, "chord"),
+        ("ld_max", m.ld_max, "-"),
+        ("cl_at_ld_max", m.cl_at_ld_max, "-"),
+        ("alpha_at_ld_max_deg", m.alpha_at_ld_max_deg, "deg"),
+    ]
+    return rows
+
+
 def _converged(polar: Polar) -> Polar:
     """Converged points; raises if there are none."""
     c = polar.converged_only()
