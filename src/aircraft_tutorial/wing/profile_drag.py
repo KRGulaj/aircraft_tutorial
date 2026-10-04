@@ -9,10 +9,24 @@ attack:
 1. the streamwise local cl_j is taken to the sweep-normal section, cl_n = cl_j / cos²Λ (the
    reduction the section polar was run for, Λ = quarter-chord sweep);
 2. cd_n(cl_n) is interpolated linearly in the usable part of the polar;
-3. cd_n is taken to the streamwise frame (`sweep_drag_factor`) and scaled from the polar's
-   reference chord to the strip chord, cd = cd_n·k_Λ·(c_j / c_ref)^n, n = −0.2 (turbulent flat
-   plate, c_f ∝ Re^−0.2; at fixed flight condition Re ∝ c);
+3. cd_n is taken to the streamwise frame (`sweep_drag_factor`) and scaled from the Reynolds
+   number of the polar to that of the strip, cd = cd_n·k_Λ·c_f(Re_j) / c_f(Re_ref)
+   (`reynolds_factor`);
 4. the strips are integrated over both halves: CD_profile = Σ cd_j·dA_j / (S/2).
+
+Reynolds scaling. Cruise profile drag is mostly turbulent skin friction (at Re_n ~ 10⁷ transition
+is close to the leading edge), so cd is scaled like the skin-friction coefficient of a smooth
+flat plate with a turbulent boundary layer, the Prandtl-Schlichting law
+
+    c_f = 0.455 / (log₁₀ Re)^2.58
+
+(Schlichting, Boundary-Layer Theory, turbulent flat plate; Raymer, Aircraft Design: A Conceptual
+Approach, component build-up method, where it carries an extra compressibility factor
+(1 + 0.144·M²)^−0.65 that is the same for every strip and cancels in the ratio). At a fixed
+flight condition Re is proportional to the chord, Re_j = Re_ref·c_j / c_ref. The form factor
+(pressure drag) is taken as independent of Re. The local exponent of this law,
+d ln c_f / d ln Re = −2.58 / ln Re, is −0.15 at Re = 4·10⁷; the 1/7-power law c_f ∝ Re^−0.2
+fits Re ≲ 10⁷ and would overstate the scaling here.
 
 A strip whose cl_n lies outside the usable polar gets cd = NaN, flagged STALLED above the top
 and BELOW_POLAR below the bottom. The CD_profile of that angle is then NaN: no clamped or
@@ -147,9 +161,39 @@ def sweep_drag_factor(mode: str, sweep_deg: float) -> float:
     raise ProfileDragError(f"unknown sweep drag mode {mode!r}, expected one of {SWEEP_DRAG_MODES}")
 
 
+def turbulent_skin_friction(reynolds: NDArray[np.float64] | float) -> NDArray[np.float64]:
+    """Prandtl-Schlichting skin-friction coefficient of a smooth turbulent flat plate,
+    c_f = 0.455 / (log₁₀ Re)^2.58.
+
+    Args:
+        reynolds: Reynolds number based on the plate length (chord) [-], > 1.
+
+    Returns:
+        c_f [-].
+    """
+    return 0.455 / np.log10(np.asarray(reynolds, dtype=np.float64)) ** 2.58
+
+
+def reynolds_factor(chord_m: NDArray[np.float64], chord_ref_m: float,
+                    reynolds_ref: float) -> NDArray[np.float64]:
+    """Scaling of cd from the polar's Reynolds number to the strip's, c_f(Re_j) / c_f(Re_ref),
+    with Re_j = Re_ref·c_j / c_ref.
+
+    Args:
+        chord_m: Strip chords [m].
+        chord_ref_m: Streamwise chord of the polar's Reynolds number [m].
+        reynolds_ref: Reynolds number of the polar [-].
+
+    Returns:
+        The factor [-]; above 1 for chords shorter than c_ref.
+    """
+    reynolds = reynolds_ref * np.asarray(chord_m, dtype=np.float64) / chord_ref_m
+    return turbulent_skin_friction(reynolds) / turbulent_skin_friction(reynolds_ref)
+
+
 def strip_profile_drag(strips: StripLoads, lookup: DragLookup, *, sweep_deg: float,
-                       chord_ref_m: float, area_m2: float, mode: str,
-                       reynolds_exponent: float) -> tuple[StripDrag, float]:
+                       chord_ref_m: float, reynolds_ref: float, area_m2: float,
+                       mode: str) -> tuple[StripDrag, float]:
     """Profile drag of one angle of attack from its strips.
 
     Args:
@@ -157,9 +201,9 @@ def strip_profile_drag(strips: StripLoads, lookup: DragLookup, *, sweep_deg: flo
         lookup: Usable section polar.
         sweep_deg: Quarter-chord sweep [deg].
         chord_ref_m: Streamwise chord whose sweep-normal Reynolds number is that of the polar [m].
+        reynolds_ref: Reynolds number of the polar [-].
         area_m2: Wing reference area, both halves [m^2].
         mode: Sweep drag mode, see `sweep_drag_factor`.
-        reynolds_exponent: n in (c / c_ref)^n [-].
 
     Returns:
         The strip values and CD_profile [-] (NaN if any strip is outside the polar).
@@ -167,6 +211,6 @@ def strip_profile_drag(strips: StripLoads, lookup: DragLookup, *, sweep_deg: flo
     cl_n = normal_cl(strips.cl, sweep_deg)
     cd_n, status = section_cd(cl_n, lookup)
     cd = (cd_n * sweep_drag_factor(mode, sweep_deg)
-          * (strips.chord_m / chord_ref_m) ** reynolds_exponent)
+          * reynolds_factor(strips.chord_m, chord_ref_m, reynolds_ref))
     cd_profile = float(np.sum(cd * strips.area_m2) / (area_m2 / 2.0))
     return StripDrag(cl_n=cl_n, cd_n=cd_n, cd=cd, status=status), cd_profile

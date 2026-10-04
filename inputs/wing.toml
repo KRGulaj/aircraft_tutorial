@@ -43,7 +43,8 @@ alpha_npts = 15                 # 1 deg step, so 0 deg (the trim point) is a com
 [drag]
 # CD = CDi (VSPAERO, Trefftz plane) + CD_profile (XFoil polar, strip by strip) + CD_wave (Korn + ADSEE)
 korn_sweep_chord_fraction = 0.5          # half-chord sweep in the swept Korn equation
-reynolds_exponent = -0.2                 # strip cd scaled by (c / c_ref)^-0.2, turbulent flat plate
+# strip cd is scaled from the polar's Re to the strip's by the Prandtl-Schlichting turbulent
+# flat-plate law, c_f = 0.455 / (log10 Re)^2.58 (wing/profile_drag.py)
 sweep_drag_mode = "friction"             # cd = cd_n: skin friction is not reduced by sweep (baseline)
 sensitivity_sweep_drag_mode = "cos3"     # cd = cd_n cos^3: pure simple sweep theory (optimistic)
 

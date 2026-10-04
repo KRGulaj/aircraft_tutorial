@@ -42,7 +42,6 @@ Expected layout::
 
     [drag]
     korn_sweep_chord_fraction = 0.5
-    reynolds_exponent = -0.2
     sweep_drag_mode = "friction"
     sensitivity_sweep_drag_mode = "cos3"
 
@@ -169,13 +168,11 @@ class DragSettings:
 
     Attributes:
         korn_sweep_chord_fraction: Chord line whose sweep enters the Korn equation [-].
-        reynolds_exponent: n in the strip correction cd ∝ (c / c_ref)^n [-].
         sweep_drag_mode: Baseline sweep drag mode, "friction" or "cos3".
         sensitivity_sweep_drag_mode: Mode reported as the sensitivity.
     """
 
     korn_sweep_chord_fraction: float
-    reynolds_exponent: float
     sweep_drag_mode: str
     sensitivity_sweep_drag_mode: str
 
@@ -309,16 +306,14 @@ def _vlm(t: dict[str, object]) -> VlmSettings:
 def _drag(t: dict[str, object]) -> DragSettings:
     """Validate the [drag] table."""
     fraction = number(t, "drag.korn_sweep_chord_fraction")
-    exponent = number(t, "drag.reynolds_exponent")
     mode = string(t, "drag.sweep_drag_mode")
     sensitivity = string(t, "drag.sensitivity_sweep_drag_mode")
     require(0.0 <= fraction <= 1.0, "drag.korn_sweep_chord_fraction", fraction,
             "must be in [0, 1]")
-    require(-1.0 <= exponent <= 0.0, "drag.reynolds_exponent", exponent, "must be in [-1, 0]")
     for key, value in (("drag.sweep_drag_mode", mode),
                        ("drag.sensitivity_sweep_drag_mode", sensitivity)):
         require(value in SWEEP_DRAG_MODES, key, value, f"must be one of {SWEEP_DRAG_MODES}")
-    return DragSettings(fraction, exponent, mode, sensitivity)
+    return DragSettings(fraction, mode, sensitivity)
 
 
 def _wings(raw: dict[str, object], base: Path) -> tuple[WingEntry, ...]:

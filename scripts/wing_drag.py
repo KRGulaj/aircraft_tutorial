@@ -11,9 +11,10 @@ Reads, for each wing of inputs/wing.toml:
 - the section polar CSV named by `polar` in the [[wing]] entry, at the sweep-normal cruise
   condition (M_n, Re_n of the MAC).
 
-The reference chord of the strip Reynolds scaling is the streamwise chord whose sweep-normal
-Reynolds number equals the polar's, c_ref = Re_polar / (Re_n per metre); it is the MAC when the
-polar was run at Re_n of the MAC.
+Strip cd is scaled from the polar's Reynolds number to the strip's with the Prandtl-Schlichting
+law (wing/profile_drag.py). The reference chord of that scaling is the streamwise chord whose
+sweep-normal Reynolds number equals the polar's, c_ref = Re_polar / (Re_n per metre); it is the
+MAC when the polar was run at Re_n of the MAC.
 
 Writes drag_polar.csv, strip_drag.csv and drag_polar.png to results/wing/<name>/, and
 drag_polars.png and drag_summary.md to results/wing/.
@@ -121,12 +122,11 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
     for alpha, cl, cdi in zip(vlm.alpha_deg, vlm.cl, vlm.cdi, strict=True):
         s = strips.at_alpha(float(alpha))
         out, cd_prof = pd.strip_profile_drag(
-            s, lookup, sweep_deg=sweep, chord_ref_m=chord_ref, area_m2=planform.area_m2,
-            mode=case.drag.sweep_drag_mode, reynolds_exponent=case.drag.reynolds_exponent)
+            s, lookup, sweep_deg=sweep, chord_ref_m=chord_ref, reynolds_ref=section.reynolds,
+            area_m2=planform.area_m2, mode=case.drag.sweep_drag_mode)
         _, cd_prof_sens = pd.strip_profile_drag(
-            s, lookup, sweep_deg=sweep, chord_ref_m=chord_ref, area_m2=planform.area_m2,
-            mode=case.drag.sensitivity_sweep_drag_mode,
-            reynolds_exponent=case.drag.reynolds_exponent)
+            s, lookup, sweep_deg=sweep, chord_ref_m=chord_ref, reynolds_ref=section.reynolds,
+            area_m2=planform.area_m2, mode=case.drag.sensitivity_sweep_drag_mode)
         m_dd = korn_mdd(entry.kappa_a, thickness, float(cl), sweep_korn)
         cd_wave = wave_drag(cruise.mach, m_dd)
         cd = float(cdi) + cd_prof + cd_wave
@@ -197,7 +197,8 @@ def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
         "CD_wave (swept Korn + ADSEE drag rise). Isolated wing, no other components.",
         "",
         f"- Strips: cl_n = cl / cos²Λ_c/4 (Λ = {planform.sweep_quarter_chord_deg} deg), "
-        f"cd = cd_n·k_Λ·(c / c_ref)^{case.drag.reynolds_exponent}, baseline k_Λ: "
+        "cd = cd_n·k_Λ·c_f(Re_strip)/c_f(Re_polar), Prandtl-Schlichting "
+        "c_f = 0.455/(log₁₀Re)^2.58, Re_strip = Re_polar·c/c_ref; baseline k_Λ: "
         f"'{case.drag.sweep_drag_mode}', sensitivity: '{sens}'.",
         f"- Korn: sweep of the {case.drag.korn_sweep_chord_fraction:g}c line = "
         f"{planform.sweep_deg(case.drag.korn_sweep_chord_fraction):.2f} deg, wing CL.",

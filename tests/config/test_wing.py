@@ -48,7 +48,6 @@ alpha_npts = 15
 
 [drag]
 korn_sweep_chord_fraction = 0.5
-reynolds_exponent = -0.2
 sweep_drag_mode = "friction"
 sensitivity_sweep_drag_mode = "cos3"
 
@@ -111,13 +110,14 @@ def test_load_wing_case_valid_file_returns_every_value(tmp_path: Path) -> None:
         ("kappa_a = 0.95", "kappa_a = 1.5", "wing[1].kappa_a"),
         ('polar = "../results/b.csv"', "", "wing[1].polar"),
         ('sweep_drag_mode = "friction"', 'sweep_drag_mode = "cos2"', "drag.sweep_drag_mode"),
-        ("reynolds_exponent = -0.2", "reynolds_exponent = 0.2", "drag.reynolds_exponent"),
+        ("korn_sweep_chord_fraction = 0.5", "korn_sweep_chord_fraction = 1.5",
+         "drag.korn_sweep_chord_fraction"),
     ],
     ids=[
         "missing_key", "zero_span", "sweep_90", "supersonic", "above_isa_range", "zero_max_twist",
         "float_iter", "bool_as_int", "alpha_range_without_zero", "zero_off_grid",
         "space_in_name", "duplicate_name", "missing_airfoil", "kappa_out_of_range",
-        "missing_polar_key", "unknown_mode", "positive_re_exponent",
+        "missing_polar_key", "unknown_mode", "korn_fraction_above_one",
     ],
 )
 def test_load_wing_case_invalid_value_raises_naming_key(

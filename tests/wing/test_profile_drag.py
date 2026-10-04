@@ -17,9 +17,11 @@ from aircraft_tutorial.wing.profile_drag import (
     STALLED,
     DragLookup,
     ProfileDragError,
+    reynolds_factor,
     section_cd,
     strip_profile_drag,
     sweep_drag_factor,
+    turbulent_skin_friction,
     usable_polar,
 )
 from aircraft_tutorial.wing.vlm_results import StripLoads
@@ -84,14 +86,38 @@ def test_strip_profile_drag_uniform_strips_returns_section_cd() -> None:
                         area_m2=np.full(4, 2.5), cl=np.full(4, 0.4))
 
     out, cd_profile = strip_profile_drag(strips, LOOKUP, sweep_deg=0.0, chord_ref_m=2.0,
-                                         area_m2=20.0, mode="friction", reynolds_exponent=-0.2)
+                                         reynolds_ref=4e7, area_m2=20.0, mode="friction")
 
     assert cd_profile == pytest.approx(0.007, rel=1e-12)
     np.testing.assert_array_equal(out.status, np.full(4, IN_RANGE))
 
 
+def test_turbulent_skin_friction_matches_hand_calculation() -> None:
+    """Re = 1e7: 0.455 / 7^2.58 = 0.455 / 151.47 = 0.0030037 (hand calculation)."""
+    assert float(turbulent_skin_friction(1e7)) == pytest.approx(0.455 / 7.0**2.58, rel=1e-12)
+    assert float(turbulent_skin_friction(1e7)) == pytest.approx(0.0030037, abs=1e-7)
+
+
+def test_reynolds_factor_is_one_at_reference_and_follows_local_exponent() -> None:
+    """c = c_ref gives 1; a small chord change follows the local exponent −2.58 / ln Re."""
+    re_ref = 4.1646e7
+    factor = reynolds_factor(np.array([9.855, 9.855 * 1.001]), 9.855, re_ref)
+
+    assert float(factor[0]) == pytest.approx(1.0, abs=1e-15)
+    assert math.log(float(factor[1])) / math.log(1.001) == pytest.approx(
+        -2.58 / math.log(re_ref), rel=1e-3)
+
+
+def test_reynolds_factor_shorter_chord_has_more_drag() -> None:
+    """Tip chord (1.569 m, Re = 6.63e6): (7.6196 / 6.8216)^2.58 = 1.330; root (14.63 m): 0.944."""
+    factor = reynolds_factor(np.array([1.569, 14.63]), 9.855, 4.1646e7)
+
+    assert float(factor[0]) == pytest.approx(1.330, abs=1e-3)
+    assert float(factor[1]) == pytest.approx(0.944, abs=1e-3)
+
+
 def test_strip_profile_drag_applies_sweep_and_reynolds_scaling() -> None:
-    """cl_n = cl / cos²Λ is looked up; a chord twice c_ref scales cd by 2^-0.2."""
+    """cl_n = cl / cos²Λ is looked up; a chord twice c_ref scales cd by c_f(2·Re)/c_f(Re)."""
     sweep = 30.0
     cl_n = 0.4
     strips = StripLoads(alpha_deg=np.zeros(1), y_m=np.ones(1), chord_m=np.array([4.0]),
@@ -99,10 +125,11 @@ def test_strip_profile_drag_applies_sweep_and_reynolds_scaling() -> None:
                         cl=np.array([cl_n * math.cos(math.radians(sweep)) ** 2]))
 
     out, cd_profile = strip_profile_drag(strips, LOOKUP, sweep_deg=sweep, chord_ref_m=2.0,
-                                         area_m2=20.0, mode="friction", reynolds_exponent=-0.2)
+                                         reynolds_ref=4e7, area_m2=20.0, mode="friction")
 
     assert float(out.cl_n[0]) == pytest.approx(cl_n)
-    assert cd_profile == pytest.approx(0.007 * 2.0**-0.2, rel=1e-12)
+    expected = 0.007 * (math.log10(4e7) / math.log10(8e7)) ** 2.58
+    assert cd_profile == pytest.approx(expected, rel=1e-12)
 
 
 def test_strip_profile_drag_with_a_stalled_strip_is_nan() -> None:
@@ -111,7 +138,7 @@ def test_strip_profile_drag_with_a_stalled_strip_is_nan() -> None:
                         area_m2=np.full(2, 5.0), cl=np.array([0.4, 0.9]))
 
     out, cd_profile = strip_profile_drag(strips, LOOKUP, sweep_deg=0.0, chord_ref_m=2.0,
-                                         area_m2=20.0, mode="friction", reynolds_exponent=-0.2)
+                                         reynolds_ref=4e7, area_m2=20.0, mode="friction")
 
     assert math.isnan(cd_profile)
     assert int(out.status[1]) == STALLED
