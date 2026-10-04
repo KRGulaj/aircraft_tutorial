@@ -4,7 +4,8 @@
 """Load the wing-analysis run definition (task 1c) from TOML into frozen dataclasses.
 
 The TOML file holds the aircraft data, the trapezoidal planform, the cruise condition, the
-twist-sizing settings, the VLM settings, the drag settings and the wings to analyse. Every value is validated on
+twist-sizing settings, the VLM settings, the drag settings, the analytical-method settings and
+the wings to analyse. Every value is validated on
 load, and a bad value raises `CaseError` naming the key and the value. Relative file paths
 resolve against the directory of the TOML file.
 
@@ -44,15 +45,22 @@ Expected layout::
     korn_sweep_chord_fraction = 0.5
     sweep_drag_mode = "friction"
     sensitivity_sweep_drag_mode = "cos3"
+    roughness_m = 0.634e-5
+    cutoff_regime = "transonic"
+    laminar_fraction = 0.0
+
+    [analytic]
+    eta = 0.95
 
     [[wing]]
     name = "WING-1"
     airfoil = "../airfoils/NACA2412.dat"
-    polar = "../results/section/cruise/NACA2412.csv"
+    polar = "../results/3d_input/naca2412_polar.csv"
+    metrics = "../results/3d_input/naca2412_metrics.csv"
     kappa_a = 0.87
 
-The section polar file is not required to exist when the file is loaded: the twist sizing does
-not need it, and the drag step checks it when it reads it.
+The section polar and metrics files are not required to exist when the file is loaded: the twist
+sizing does not need them, and the steps that do check them when they read them.
 """
 
 from __future__ import annotations
@@ -66,6 +74,9 @@ from typing import Final
 from aircraft_tutorial.common.atmosphere import H_MAX
 from aircraft_tutorial.config.cases import CaseError
 from aircraft_tutorial.config.fields import integer, number, require, string, table
+
+CUTOFF_REGIMES: Final[tuple[str, ...]] = ("subsonic", "transonic")
+"""Cutoff-Reynolds formulas of the flat-plate skin friction (wing.skin_friction)."""
 
 SWEEP_DRAG_MODES: Final[tuple[str, ...]] = ("friction", "cos3")
 """Ways to take a sweep-normal section cd to the streamwise one (wing.profile_drag)."""
@@ -170,11 +181,28 @@ class DragSettings:
         korn_sweep_chord_fraction: Chord line whose sweep enters the Korn equation [-].
         sweep_drag_mode: Baseline sweep drag mode, "friction" or "cos3".
         sensitivity_sweep_drag_mode: Mode reported as the sensitivity.
+        roughness_m: Surface roughness height k of the skin-friction cutoff Reynolds number [m].
+        cutoff_regime: "subsonic" or "transonic" cutoff-Reynolds formula.
+        laminar_fraction: Laminar part of the chord in the skin-friction average [-].
     """
 
     korn_sweep_chord_fraction: float
     sweep_drag_mode: str
     sensitivity_sweep_drag_mode: str
+    roughness_m: float
+    cutoff_regime: str
+    laminar_fraction: float
+
+
+@dataclass(frozen=True)
+class AnalyticSettings:
+    """Settings of the analytical (DATCOM) lift curve.
+
+    Attributes:
+        eta: Airfoil efficiency factor η of the DATCOM lift-curve slope [-].
+    """
+
+    eta: float
 
 
 @dataclass(frozen=True)
@@ -185,12 +213,14 @@ class WingEntry:
         name: Wing name, for example "WING-1"; also the result directory name.
         airfoil: Absolute path of the section coordinate file, used root to tip.
         polar: Absolute path of the section polar CSV at the cruise section condition.
+        metrics: Absolute path of the section characteristics CSV of the same run.
         kappa_a: Korn technology factor κ_A of the section [-].
     """
 
     name: str
     airfoil: Path
     polar: Path
+    metrics: Path
     kappa_a: float
 
 
@@ -204,6 +234,7 @@ class WingCase:
     twist: TwistSettings
     vlm: VlmSettings
     drag: DragSettings
+    analytic: AnalyticSettings
     wings: tuple[WingEntry, ...]
 
 
@@ -231,6 +262,7 @@ def load_wing_case(path: Path) -> WingCase:
         twist=_twist(table(raw, "twist")),
         vlm=_vlm(table(raw, "vlm")),
         drag=_drag(table(raw, "drag")),
+        analytic=_analytic(table(raw, "analytic")),
         wings=_wings(raw, path.resolve().parent),
     )
 
@@ -313,7 +345,21 @@ def _drag(t: dict[str, object]) -> DragSettings:
     for key, value in (("drag.sweep_drag_mode", mode),
                        ("drag.sensitivity_sweep_drag_mode", sensitivity)):
         require(value in SWEEP_DRAG_MODES, key, value, f"must be one of {SWEEP_DRAG_MODES}")
-    return DragSettings(fraction, mode, sensitivity)
+    roughness = number(t, "drag.roughness_m")
+    regime = string(t, "drag.cutoff_regime")
+    laminar = number(t, "drag.laminar_fraction")
+    require(0.0 < roughness < 1e-3, "drag.roughness_m", roughness, "must be in (0, 1e-3) m")
+    require(regime in CUTOFF_REGIMES, "drag.cutoff_regime", regime,
+            f"must be one of {CUTOFF_REGIMES}")
+    require(0.0 <= laminar <= 1.0, "drag.laminar_fraction", laminar, "must be in [0, 1]")
+    return DragSettings(fraction, mode, sensitivity, roughness, regime, laminar)
+
+
+def _analytic(t: dict[str, object]) -> AnalyticSettings:
+    """Validate the [analytic] table."""
+    eta = number(t, "analytic.eta")
+    require(0.5 <= eta <= 1.2, "analytic.eta", eta, "must be in [0.5, 1.2]")
+    return AnalyticSettings(eta=eta)
 
 
 def _wings(raw: dict[str, object], base: Path) -> tuple[WingEntry, ...]:
@@ -334,7 +380,9 @@ def _wings(raw: dict[str, object], base: Path) -> tuple[WingEntry, ...]:
         polar = (base / string(entry, f"wing[{i}].polar")).resolve()
         kappa_a = number(entry, f"wing[{i}].kappa_a")
         require(0.7 <= kappa_a <= 1.0, f"wing[{i}].kappa_a", kappa_a, "must be in [0.7, 1.0]")
-        result.append(WingEntry(name=name, airfoil=resolved, polar=polar, kappa_a=kappa_a))
+        metrics = (base / string(entry, f"wing[{i}].metrics")).resolve()
+        result.append(WingEntry(name=name, airfoil=resolved, polar=polar, metrics=metrics,
+                                kappa_a=kappa_a))
     names = [w.name for w in result]
     if len(set(names)) != len(names):
         raise CaseError(f"[[wing]]: names must be unique, got {names}")

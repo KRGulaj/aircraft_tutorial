@@ -100,6 +100,26 @@ def read_strips_csv(path: Path) -> StripLoads:
     return StripLoads(c["alpha_deg"], c["y_m"], c["chord_m"], c["area_m2"], c["cl"])
 
 
+def write_twist_history(history: tuple[tuple[float, float], ...], path: Path) -> None:
+    """Write the evaluated (twist, CL at zero body angle) pairs of a twist sizing."""
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(("evaluation", "twist_deg", "cl_alpha0"))
+        for i, (twist, cl) in enumerate(history):
+            writer.writerow((i, repr(twist), repr(cl)))
+
+
+def read_twist_history(path: Path) -> tuple[tuple[float, float], ...]:
+    """Read the (twist [deg], CL at zero body angle) pairs written by `write_twist_history`;
+    the last pair is the sized twist.
+
+    Raises:
+        VlmResultsError: If the file is missing or the columns do not match.
+    """
+    c = _read(path, ("evaluation", "twist_deg", "cl_alpha0"))
+    return tuple(zip(c["twist_deg"].tolist(), c["cl_alpha0"].tolist(), strict=True))
+
+
 def _write(record: VlmPolar | StripLoads, path: Path) -> None:
     """Write the array fields of a record as CSV columns, full precision."""
     names = [f.name for f in fields(record)]

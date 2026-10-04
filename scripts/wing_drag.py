@@ -8,11 +8,12 @@
 Reads, for each wing of inputs/wing.toml:
 
 - results/wing/<name>/polar.csv and span_loads.csv, written by scripts/wing_twist.py;
-- the section polar CSV named by `polar` in the [[wing]] entry, at the sweep-normal cruise
-  condition (M_n, Re_n of the MAC).
+- the section polar CSV named by `polar` in the [[wing]] entry (results/3d_input/): Re_n of the
+  MAC at cruise, at low Mach number (group decision, inputs/section.toml); compressibility is
+  added here through the Korn wave drag.
 
-Strip cd is scaled from the polar's Reynolds number to the strip's with the Prandtl-Schlichting
-law (wing/profile_drag.py). The reference chord of that scaling is the streamwise chord whose
+Strip cd is scaled from the polar's Reynolds number to the strip's with the lecture's flat-plate
+skin friction (wing/skin_friction.py, wing/profile_drag.py). The reference chord of that scaling is the streamwise chord whose
 sweep-normal Reynolds number equals the polar's, c_ref = Re_polar / (Re_n per metre); it is the
 MAC when the polar was run at Re_n of the MAC.
 
@@ -40,6 +41,7 @@ from aircraft_tutorial.plots.wing import DragPolar, plot_drag_build_up, plot_dra
 from aircraft_tutorial.wing import profile_drag as pd
 from aircraft_tutorial.wing.cruise import CruisePoint, cruise_point
 from aircraft_tutorial.wing.planform import TrapezoidalPlanform
+from aircraft_tutorial.wing.skin_friction import FrictionModel
 from aircraft_tutorial.wing.vlm_results import read_polar_csv, read_strips_csv
 from aircraft_tutorial.wing.wave_drag import korn_mdd, wave_drag
 
@@ -47,7 +49,8 @@ ROOT: Final[Path] = Path(__file__).resolve().parents[1]
 CASE_FILE: Final[Path] = ROOT / "inputs" / "wing.toml"
 OUT_DIR: Final[Path] = ROOT / "results" / "wing"
 MACH_TOLERANCE: Final[float] = 0.005
-"""A polar Mach number further than this from M_n is reported as a mismatch [-]."""
+"""A polar within this of M_n counts as run at the cruise normal Mach number [-]; only then is
+its cp_min compared with Cp*."""
 
 _POLAR_COLUMNS: Final[tuple[str, ...]] = (
     "alpha_deg", "cl", "cdi", "cd_profile", "cd_profile_sens", "m_dd", "cd_wave", "cd",
@@ -110,9 +113,12 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
     thickness = max_thickness(normalized(read_dat(entry.airfoil)))[0]
     sweep_korn = planform.sweep_deg(case.drag.korn_sweep_chord_fraction)
     sweep = planform.sweep_quarter_chord_deg
+    friction = FrictionModel(mach=section.mach, roughness_m=case.drag.roughness_m,
+                             cutoff_regime=case.drag.cutoff_regime,
+                             laminar_fraction=case.drag.laminar_fraction)
     if abs(section.mach - cruise.mach_normal) > MACH_TOLERANCE:
-        print(f"WARNING {entry.name}: polar Mach {section.mach} differs from M_n = "
-              f"{cruise.mach_normal:.4f}")
+        print(f"note {entry.name}: polar at M = {section.mach}, not M_n = "
+              f"{cruise.mach_normal:.4f}; compressibility only through the wave drag")
     print(f"{entry.name}: polar {entry.polar.name} ({section.airfoil}, Re = {section.reynolds:.4g}, "
           f"M = {section.mach}), c_ref = {chord_ref:.3f} m, usable cl_n "
           f"[{lookup.cl[0]:.3f}, {lookup.cl[-1]:.3f}], t/c = {thickness:.4f}")
@@ -123,10 +129,11 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
         s = strips.at_alpha(float(alpha))
         out, cd_prof = pd.strip_profile_drag(
             s, lookup, sweep_deg=sweep, chord_ref_m=chord_ref, reynolds_ref=section.reynolds,
-            area_m2=planform.area_m2, mode=case.drag.sweep_drag_mode)
+            area_m2=planform.area_m2, mode=case.drag.sweep_drag_mode, friction=friction)
         _, cd_prof_sens = pd.strip_profile_drag(
             s, lookup, sweep_deg=sweep, chord_ref_m=chord_ref, reynolds_ref=section.reynolds,
-            area_m2=planform.area_m2, mode=case.drag.sensitivity_sweep_drag_mode)
+            area_m2=planform.area_m2, mode=case.drag.sensitivity_sweep_drag_mode,
+            friction=friction)
         m_dd = korn_mdd(entry.kappa_a, thickness, float(cl), sweep_korn)
         cd_wave = wave_drag(cruise.mach, m_dd)
         cd = float(cdi) + cd_prof + cd_wave
@@ -197,8 +204,10 @@ def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
         "CD_wave (swept Korn + ADSEE drag rise). Isolated wing, no other components.",
         "",
         f"- Strips: cl_n = cl / cos²Λ_c/4 (Λ = {planform.sweep_quarter_chord_deg} deg), "
-        "cd = cd_n·k_Λ·c_f(Re_strip)/c_f(Re_polar), Prandtl-Schlichting "
-        "c_f = 0.455/(log₁₀Re)^2.58, Re_strip = Re_polar·c/c_ref; baseline k_Λ: "
+        "cd = cd_n·k_Λ·C_f(Re_strip)/C_f(Re_polar), Re_strip = Re_polar·c/c_ref, lecture "
+        "flat-plate C_f (laminar 1.328/√Re, turbulent 0.455/((log₁₀Re)^2.58(1+0.144M²)^0.65), "
+        f"Re capped at the {case.drag.cutoff_regime} cutoff, k = {case.drag.roughness_m:g} m, "
+        f"x_lam = {case.drag.laminar_fraction:g}); baseline k_Λ: "
         f"'{case.drag.sweep_drag_mode}', sensitivity: '{sens}'.",
         f"- Korn: sweep of the {case.drag.korn_sweep_chord_fraction:g}c line = "
         f"{planform.sweep_deg(case.drag.korn_sweep_chord_fraction):.2f} deg, wing CL.",
@@ -213,12 +222,17 @@ def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
     ]
     for r in results:
         s = r.section
-        supersonic = int(np.sum(s.converged & (s.cp_min < cruise.cp_crit_normal)))
+        if abs(s.mach - cruise.mach_normal) <= MACH_TOLERANCE:
+            n_conv = int(np.sum(s.converged))
+            n_super = int(np.sum(s.converged & (s.cp_min < cruise.cp_crit_normal)))
+            supersonic = f"{n_super} of {n_conv}"
+        else:
+            supersonic = f"n/a (polar at M = {s.mach})"
         lines.append(
             f"| {r.entry.name} | {r.entry.polar.name} | {s.airfoil} | {s.reynolds:.4e} "
             f"| {s.mach} | {s.ncrit} | {r.chord_ref_m:.3f} "
             f"| {r.lookup.cl[0]:.3f} … {r.lookup.cl[-1]:.3f} | {r.thickness_ratio:.4f} "
-            f"| {r.entry.kappa_a} | {supersonic} of {int(np.sum(s.converged))} |")
+            f"| {r.entry.kappa_a} | {supersonic} |")
     lines += [
         "",
         f"## Trim point (CL = CL_des = {cruise.cl_design:.4f})",

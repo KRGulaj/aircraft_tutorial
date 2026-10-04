@@ -43,23 +43,37 @@ alpha_npts = 15                 # 1 deg step, so 0 deg (the trim point) is a com
 [drag]
 # CD = CDi (VSPAERO, Trefftz plane) + CD_profile (XFoil polar, strip by strip) + CD_wave (Korn + ADSEE)
 korn_sweep_chord_fraction = 0.5          # half-chord sweep in the swept Korn equation
-# strip cd is scaled from the polar's Re to the strip's by the Prandtl-Schlichting turbulent
-# flat-plate law, c_f = 0.455 / (log10 Re)^2.58 (wing/profile_drag.py)
+# strip cd is scaled from the polar's Re to the strip's like the lecture's flat-plate skin
+# friction (ADSEE-2, "Flat plate skin friction coefficient"; wing/skin_friction.py):
+#   Cf_lam = 1.328 / sqrt(Re),  Cf_turb = 0.455 / ((log10 Re)^2.58 (1 + 0.144 M^2)^0.65),
+#   Re = min(rho V l / mu, cutoff Re),  Cf = x_lam Cf_lam + (1 - x_lam) Cf_turb
 sweep_drag_mode = "friction"             # cd = cd_n: skin friction is not reduced by sweep (baseline)
 sensitivity_sweep_drag_mode = "cos3"     # cd = cd_n cos^3: pure simple sweep theory (optimistic)
+roughness_m = 0.634e-5                   # lecture table: smooth paint
+cutoff_regime = "transonic"              # cruise M = 0.855: 44.62 (l/k)^1.053 M^1.16
+laminar_fraction = 0.0                   # Re_n >= 6.6e6 along the span: transition near the LE
 
-# polar: XFoil polar at the sweep-normal cruise condition of the MAC (M_n = 0.678,
-# Re_n = 4.165e7, see results/wing/twist_summary.md), written by section.polar.write_csv.
+[analytic]
+# Comparison only. DATCOM wing lift-curve slope, ADSEE-2 lecture slide 20, [1/rad]:
+#   CL_a = 2 pi A / (2 + sqrt(4 + (A beta / eta)^2 (1 + tan^2(L_0.5c) / beta^2)))
+eta = 0.95                               # lecture: airfoil efficiency factor
+
+# polar, metrics: 2D-stage output for the 3D stage (inputs/section.toml, [[extra_run]] 3d_input).
+# Group decision: Re_n of the MAC at cruise (4.17e7) but M = 0.1, because XFoil's Karman-Tsien
+# correction is not valid at the cruise normal Mach number 0.68; compressibility enters on the 3D
+# side (VSPAERO Prandtl-Glauert for lift, Korn + ADSEE for wave drag).
 # kappa_a: Korn technology factor, 0.87 conventional / 0.95 supercritical.
 
 [[wing]]
 name = "WING-1"
 airfoil = "../airfoils/NACA2412.dat"        # task 1a: selected NACA four-digit section
-polar = "../results/section/cruise/NACA2412.csv"
+polar = "../results/3d_input/naca2412_polar.csv"
+metrics = "../results/3d_input/naca2412_metrics.csv"
 kappa_a = 0.87                              # conventional section
 
 [[wing]]
 name = "WING-2"
 airfoil = "../airfoils/NACA66-410_gen.dat"  # task 1a: NACA 6-series section, same file as section.toml
-polar = "../results/section/cruise/NACA66-410.csv"
+polar = "../results/3d_input/naca66-410_polar.csv"
+metrics = "../results/3d_input/naca66-410_metrics.csv"
 kappa_a = 0.87                              # conventional section (not supercritical)

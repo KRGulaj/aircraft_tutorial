@@ -50,17 +50,25 @@ alpha_npts = 15
 korn_sweep_chord_fraction = 0.5
 sweep_drag_mode = "friction"
 sensitivity_sweep_drag_mode = "cos3"
+roughness_m = 0.634e-5
+cutoff_regime = "transonic"
+laminar_fraction = 0.0
+
+[analytic]
+eta = 0.95
 
 [[wing]]
 name = "WING-1"
 airfoil = "../airfoils/a.dat"
 polar = "../results/a.csv"
+metrics = "../results/a_metrics.csv"
 kappa_a = 0.87
 
 [[wing]]
 name = "WING-2"
 airfoil = "../airfoils/b.dat"
 polar = "../results/b.csv"
+metrics = "../results/b_metrics.csv"
 kappa_a = 0.95
 """
 
@@ -89,6 +97,10 @@ def test_load_wing_case_valid_file_returns_every_value(tmp_path: Path) -> None:
     assert case.wings[1].airfoil == (tmp_path / "airfoils" / "b.dat").resolve()
     assert case.wings[1].polar == (tmp_path / "results" / "b.csv").resolve()
     assert (case.wings[1].kappa_a, case.drag.sweep_drag_mode) == (0.95, "friction")
+    assert case.analytic.eta == 0.95
+    assert case.wings[1].metrics == (tmp_path / "results" / "b_metrics.csv").resolve()
+    assert (case.drag.roughness_m, case.drag.cutoff_regime, case.drag.laminar_fraction) == (
+        0.634e-5, "transonic", 0.0)
 
 
 @pytest.mark.parametrize(
@@ -112,12 +124,15 @@ def test_load_wing_case_valid_file_returns_every_value(tmp_path: Path) -> None:
         ('sweep_drag_mode = "friction"', 'sweep_drag_mode = "cos2"', "drag.sweep_drag_mode"),
         ("korn_sweep_chord_fraction = 0.5", "korn_sweep_chord_fraction = 1.5",
          "drag.korn_sweep_chord_fraction"),
+        ("eta = 0.95", "eta = 0.0", "analytic.eta"),
+        ('cutoff_regime = "transonic"', 'cutoff_regime = "hypersonic"', "drag.cutoff_regime"),
+        ("laminar_fraction = 0.0", "laminar_fraction = 1.5", "drag.laminar_fraction"),
     ],
     ids=[
         "missing_key", "zero_span", "sweep_90", "supersonic", "above_isa_range", "zero_max_twist",
         "float_iter", "bool_as_int", "alpha_range_without_zero", "zero_off_grid",
         "space_in_name", "duplicate_name", "missing_airfoil", "kappa_out_of_range",
-        "missing_polar_key", "unknown_mode", "korn_fraction_above_one",
+        "missing_polar_key", "unknown_mode", "korn_fraction_above_one", "zero_eta", "unknown_regime", "laminar_above_one",
     ],
 )
 def test_load_wing_case_invalid_value_raises_naming_key(
@@ -141,3 +156,5 @@ def test_wing_toml_holds_brief_values() -> None:
     assert (case.twist.root_incidence_deg, case.twist.max_twist_deg) == (4.0, 6.0)
     assert [(w.name, w.airfoil.name) for w in case.wings] == [
         ("WING-1", "NACA2412.dat"), ("WING-2", "NACA66-410_gen.dat")]
+    assert [(w.polar.parent.name, w.polar.name) for w in case.wings] == [
+        ("3d_input", "naca2412_polar.csv"), ("3d_input", "naca66-410_polar.csv")]

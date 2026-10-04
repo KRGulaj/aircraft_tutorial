@@ -10,23 +10,17 @@ attack:
    reduction the section polar was run for, Λ = quarter-chord sweep);
 2. cd_n(cl_n) is interpolated linearly in the usable part of the polar;
 3. cd_n is taken to the streamwise frame (`sweep_drag_factor`) and scaled from the Reynolds
-   number of the polar to that of the strip, cd = cd_n·k_Λ·c_f(Re_j) / c_f(Re_ref)
+   number of the polar to that of the strip, cd = cd_n·k_Λ·C_f(Re_j) / C_f(Re_ref)
    (`reynolds_factor`);
 4. the strips are integrated over both halves: CD_profile = Σ cd_j·dA_j / (S/2).
 
-Reynolds scaling. Cruise profile drag is mostly turbulent skin friction (at Re_n ~ 10⁷ transition
-is close to the leading edge), so cd is scaled like the skin-friction coefficient of a smooth
-flat plate with a turbulent boundary layer, the Prandtl-Schlichting law
-
-    c_f = 0.455 / (log₁₀ Re)^2.58
-
-(Schlichting, Boundary-Layer Theory, turbulent flat plate; Raymer, Aircraft Design: A Conceptual
-Approach, component build-up method, where it carries an extra compressibility factor
-(1 + 0.144·M²)^−0.65 that is the same for every strip and cancels in the ratio). At a fixed
-flight condition Re is proportional to the chord, Re_j = Re_ref·c_j / c_ref. The form factor
-(pressure drag) is taken as independent of Re. The local exponent of this law,
-d ln c_f / d ln Re = −2.58 / ln Re, is −0.15 at Re = 4·10⁷; the 1/7-power law c_f ∝ Re^−0.2
-fits Re ≲ 10⁷ and would overstate the scaling here.
+Reynolds scaling. Cruise profile drag is mostly skin friction, so cd is scaled like the
+flat-plate skin-friction coefficient of the lecture (wing/skin_friction.py: laminar/turbulent
+C_f weighted by the laminar fraction, turbulent C_f = 0.455 / ((log₁₀ Re)^2.58·(1 + 0.144·M²)^0.65),
+Re capped at the roughness cutoff). The ratio is taken in the frame of the polar: the polar is a
+sweep-normal section, so the run length is the normal chord l = c·cos Λ, the Mach number is the
+polar's, and at a fixed flight condition Re_j = Re_ref·c_j / c_ref. The form factor (pressure
+drag) is taken as independent of Re.
 
 A strip whose cl_n lies outside the usable polar gets cd = NaN, flagged STALLED above the top
 and BELOW_POLAR below the bottom. The CD_profile of that angle is then NaN: no clamped or
@@ -44,6 +38,7 @@ from numpy.typing import NDArray
 
 from aircraft_tutorial.config.wing import SWEEP_DRAG_MODES
 from aircraft_tutorial.contracts.section_polar import SectionPolarData
+from aircraft_tutorial.wing.skin_friction import FrictionModel
 from aircraft_tutorial.wing.vlm_results import StripLoads
 
 IN_RANGE: Final[int] = 0
@@ -161,39 +156,30 @@ def sweep_drag_factor(mode: str, sweep_deg: float) -> float:
     raise ProfileDragError(f"unknown sweep drag mode {mode!r}, expected one of {SWEEP_DRAG_MODES}")
 
 
-def turbulent_skin_friction(reynolds: NDArray[np.float64] | float) -> NDArray[np.float64]:
-    """Prandtl-Schlichting skin-friction coefficient of a smooth turbulent flat plate,
-    c_f = 0.455 / (log₁₀ Re)^2.58.
+def reynolds_factor(chord_m: NDArray[np.float64], chord_ref_m: float, reynolds_ref: float,
+                    sweep_deg: float, friction: FrictionModel) -> NDArray[np.float64]:
+    """Scaling of cd from the polar's Reynolds number to the strip's, C_f(Re_j) / C_f(Re_ref),
+    with Re_j = Re_ref·c_j / c_ref and run length l = c·cos Λ.
 
     Args:
-        reynolds: Reynolds number based on the plate length (chord) [-], > 1.
-
-    Returns:
-        c_f [-].
-    """
-    return 0.455 / np.log10(np.asarray(reynolds, dtype=np.float64)) ** 2.58
-
-
-def reynolds_factor(chord_m: NDArray[np.float64], chord_ref_m: float,
-                    reynolds_ref: float) -> NDArray[np.float64]:
-    """Scaling of cd from the polar's Reynolds number to the strip's, c_f(Re_j) / c_f(Re_ref),
-    with Re_j = Re_ref·c_j / c_ref.
-
-    Args:
-        chord_m: Strip chords [m].
+        chord_m: Streamwise strip chords [m].
         chord_ref_m: Streamwise chord of the polar's Reynolds number [m].
         reynolds_ref: Reynolds number of the polar [-].
+        sweep_deg: Quarter-chord sweep [deg].
+        friction: Flat-plate skin-friction model, at the polar's Mach number.
 
     Returns:
         The factor [-]; above 1 for chords shorter than c_ref.
     """
-    reynolds = reynolds_ref * np.asarray(chord_m, dtype=np.float64) / chord_ref_m
-    return turbulent_skin_friction(reynolds) / turbulent_skin_friction(reynolds_ref)
+    chord = np.asarray(chord_m, dtype=np.float64)
+    cos_sweep = math.cos(math.radians(sweep_deg))
+    cf = friction.cf(reynolds_ref * chord / chord_ref_m, chord * cos_sweep)
+    return cf / friction.cf(reynolds_ref, chord_ref_m * cos_sweep)
 
 
 def strip_profile_drag(strips: StripLoads, lookup: DragLookup, *, sweep_deg: float,
                        chord_ref_m: float, reynolds_ref: float, area_m2: float,
-                       mode: str) -> tuple[StripDrag, float]:
+                       mode: str, friction: FrictionModel) -> tuple[StripDrag, float]:
     """Profile drag of one angle of attack from its strips.
 
     Args:
@@ -204,6 +190,7 @@ def strip_profile_drag(strips: StripLoads, lookup: DragLookup, *, sweep_deg: flo
         reynolds_ref: Reynolds number of the polar [-].
         area_m2: Wing reference area, both halves [m^2].
         mode: Sweep drag mode, see `sweep_drag_factor`.
+        friction: Flat-plate skin-friction model of the Reynolds scaling.
 
     Returns:
         The strip values and CD_profile [-] (NaN if any strip is outside the polar).
@@ -211,6 +198,6 @@ def strip_profile_drag(strips: StripLoads, lookup: DragLookup, *, sweep_deg: flo
     cl_n = normal_cl(strips.cl, sweep_deg)
     cd_n, status = section_cd(cl_n, lookup)
     cd = (cd_n * sweep_drag_factor(mode, sweep_deg)
-          * reynolds_factor(strips.chord_m, chord_ref_m, reynolds_ref))
+          * reynolds_factor(strips.chord_m, chord_ref_m, reynolds_ref, sweep_deg, friction))
     cd_profile = float(np.sum(cd * strips.area_m2) / (area_m2 / 2.0))
     return StripDrag(cl_n=cl_n, cd_n=cd_n, cd=cd, status=status), cd_profile

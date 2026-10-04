@@ -18,7 +18,6 @@ Needs the OpenVSP Python API. Run from the repo root: python -m scripts.wing_twi
 
 from __future__ import annotations
 
-import csv
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -163,7 +162,7 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
                                       alpha_npts=case.vlm.alpha_npts)
     vlm_results.write_polar_csv(polar, out_dir / "polar.csv")
     vlm_results.write_strips_csv(strips, out_dir / "span_loads.csv")
-    _write_history(sizing, out_dir / "twist_sizing.csv")
+    vlm_results.write_twist_history(sizing.history, out_dir / "twist_sizing.csv")
 
     result = _wing_result(entry, sizing, polar, cruise.cl_design, planform.aspect_ratio,
                           twist_deviation)
@@ -177,15 +176,6 @@ def _curve(result: WingResult, cl_design: float) -> LiftCurve:
     """Lift curve of one wing with its trim point."""
     return LiftCurve(label=result.entry.name, alpha_deg=result.polar.alpha_deg,
                      cl=result.polar.cl, trim_alpha_deg=result.trim_alpha_deg, trim_cl=cl_design)
-
-
-def _write_history(sizing: TwistSizing, path: Path) -> None:
-    """Write the evaluated (twist, CL) pairs of the sizing."""
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(("evaluation", "twist_deg", "cl_alpha0"))
-        for i, (twist, cl) in enumerate(sizing.history):
-            writer.writerow((i, repr(twist), repr(cl)))
 
 
 def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
