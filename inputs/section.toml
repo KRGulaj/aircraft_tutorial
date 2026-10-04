@@ -22,6 +22,7 @@ stop_after_failures = 8
 linear_alpha_min_deg = -4.0   # linear lift-curve window; R^2 of the fit is reported
 linear_alpha_max_deg = 6.0
 low_drag_factor = 0.10        # low-drag range: cd <= (1 + k) cd_min
+spread_windows_deg = [[-2.0, 4.0], [-6.0, 8.0]]   # a0 and alpha_0L spread = fit uncertainty
 
 [sensitivity]
 panel_nodes = [100, 160, 240, 320]
@@ -30,7 +31,9 @@ ncrit = [9.0, 10.0, 11.0]
 [[airfoil]]
 name = "NACA 2412"
 file = "../airfoils/NACA2412.dat"
+drag_bucket = false   # 4-digit: no laminar low-drag range
 
 [[airfoil]]
 name = "NACA 66-410"
 file = "../airfoils/NACA66-410_gen.dat"
+drag_bucket = true

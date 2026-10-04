@@ -30,6 +30,7 @@ stop_after_failures = 7
 linear_alpha_min_deg = -4.0
 linear_alpha_max_deg = 6.0
 low_drag_factor = 0.13
+spread_windows_deg = [[-2.5, 3.5], [-6.5, 8.5]]
 
 [sensitivity]
 panel_nodes = [100, 160, 240, 320]
@@ -38,10 +39,12 @@ ncrit = [9.0, 10.0, 11.0]
 [[airfoil]]
 name = "NACA 2412"
 file = "../airfoils/a.dat"
+drag_bucket = false
 
 [[airfoil]]
 name = "NACA 66-410"
 file = "../airfoils/b.dat"
+drag_bucket = true
 """
 
 
@@ -65,6 +68,8 @@ def test_load_section_case_valid_file_returns_every_value(tmp_path: Path) -> Non
     assert (case.xfoil.panel_nodes, case.xfoil.alpha_low_deg, case.xfoil.stop_after_failures) == (
         160, -8.5, 7)
     assert case.metrics.low_drag_factor == 0.13
+    assert case.metrics.spread_windows_deg == ((-2.5, 3.5), (-6.5, 8.5))
+    assert [a.drag_bucket for a in case.airfoils] == [False, True]
     assert case.sensitivity.panel_nodes == (100, 160, 240, 320)
     assert [a.name for a in case.airfoils] == ["NACA 2412", "NACA 66-410"]
     assert case.airfoils[1].path == (tmp_path / "airfoils" / "b.dat").resolve()
@@ -86,11 +91,14 @@ def test_load_section_case_valid_file_returns_every_value(tmp_path: Path) -> Non
         ("[100, 160, 240, 320]", "[100, 30]", "sensitivity.panel_nodes"),
         ('file = "../airfoils/b.dat"', 'file = "../airfoils/missing.dat"', "airfoil[1].file"),
         ('name = "NACA 66-410"', 'name = "NACA 2412"', "unique"),
+        ("drag_bucket = true", 'drag_bucket = "yes"', "airfoil[1].drag_bucket"),
+        ("[[-2.5, 3.5], [-6.5, 8.5]]", "[[3.5, -2.5]]", "metrics.spread_windows_deg"),
     ],
     ids=[
         "missing_key", "negative_re", "nan_mach", "supersonic", "too_many_nodes",
         "float_nodes", "bool_as_int", "alpha_range_without_zero", "zero_k",
-        "empty_list", "too_few_nodes", "missing_file", "duplicate_name",
+        "empty_list", "too_few_nodes", "missing_file", "duplicate_name", "bucket_not_bool",
+        "reversed_window",
     ],
 )
 def test_load_section_case_invalid_value_raises_naming_key(

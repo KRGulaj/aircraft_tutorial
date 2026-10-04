@@ -27,6 +27,7 @@ Expected layout::
     linear_alpha_min_deg = -4.0
     linear_alpha_max_deg = 6.0
     low_drag_factor = 0.10
+    spread_windows_deg = [[-2.0, 4.0], [-6.0, 8.0]]
 
     [sensitivity]
     panel_nodes = [100, 160, 240, 320]
@@ -35,6 +36,7 @@ Expected layout::
     [[airfoil]]
     name = "NACA 2412"
     file = "../airfoils/NACA2412.dat"
+    drag_bucket = false
 """
 
 from __future__ import annotations
@@ -98,11 +100,14 @@ class MetricSettings:
         linear_alpha_min_deg: Lower bound of the linear lift-curve window [deg].
         linear_alpha_max_deg: Upper bound of the linear lift-curve window [deg].
         low_drag_factor: k in the low-drag range definition cd <= (1 + k)·cd_min [-].
+        spread_windows_deg: Extra (min, max) windows [deg]; the spread of a₀ and α_0L over the
+            main and extra windows is the fit uncertainty.
     """
 
     linear_alpha_min_deg: float
     linear_alpha_max_deg: float
     low_drag_factor: float
+    spread_windows_deg: tuple[tuple[float, float], ...]
 
 
 @dataclass(frozen=True)
@@ -125,10 +130,13 @@ class AirfoilEntry:
     Attributes:
         name: Display name, for example "NACA 2412".
         path: Absolute path of the coordinate file.
+        drag_bucket: True if the section has a laminar low-drag range (6-series); the low-drag
+            range is only reported for such sections.
     """
 
     name: str
     path: Path
+    drag_bucket: bool
 
 
 @dataclass(frozen=True)
@@ -205,7 +213,15 @@ def _metrics(t: dict[str, object]) -> MetricSettings:
     k = _float(t, "metrics.low_drag_factor")
     _require(lo < hi, "metrics.linear_alpha_min_deg/max_deg", (lo, hi), "min must be < max")
     _require(k > 0.0, "metrics.low_drag_factor", k, "must be > 0")
-    return MetricSettings(lo, hi, k)
+    windows: list[tuple[float, float]] = []
+    for w in _list(t, "metrics.spread_windows_deg"):
+        if not (isinstance(w, list) and len(w) == 2):
+            raise CaseError(f"metrics.spread_windows_deg: each window must be [min, max], got {w!r}")
+        w_lo = _float_item(w[0], "metrics.spread_windows_deg")
+        w_hi = _float_item(w[1], "metrics.spread_windows_deg")
+        _require(w_lo < w_hi, "metrics.spread_windows_deg", w, "min must be < max")
+        windows.append((w_lo, w_hi))
+    return MetricSettings(lo, hi, k, tuple(windows))
 
 
 def _sensitivity(t: dict[str, object]) -> SensitivitySettings:
@@ -237,7 +253,10 @@ def _airfoils(raw: dict[str, object], base: Path) -> tuple[AirfoilEntry, ...]:
         resolved = (base / file).resolve()
         if not resolved.is_file():
             raise CaseError(f"airfoil[{i}].file: {resolved} does not exist")
-        result.append(AirfoilEntry(name=name, path=resolved))
+        bucket = entry.get("drag_bucket")
+        if not isinstance(bucket, bool):
+            raise CaseError(f"airfoil[{i}].drag_bucket: must be true or false, got {bucket!r}")
+        result.append(AirfoilEntry(name=name, path=resolved, drag_bucket=bucket))
     names = [a.name for a in result]
     if len(set(names)) != len(names):
         raise CaseError(f"[[airfoil]]: names must be unique, got {names}")

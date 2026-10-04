@@ -22,6 +22,7 @@ from aircraft_tutorial.section.metrics import (
     MetricError,
     aerodynamic_centre,
     compute_metrics,
+    fit_spread,
     lift_curve_fit,
     low_drag_range,
     max_lift_to_drag,
@@ -102,10 +103,33 @@ def test_max_lift_to_drag_matches_closed_form(section: Polar) -> None:
 
 def test_compute_metrics_converts_slope_to_per_radian(section: Polar) -> None:
     """a₀ per rad = 0.1083·180/π = 6.20513; no stall inside a linear polar."""
-    m = compute_metrics(section, MetricSettings(LO, HI, 0.13))
+    m = compute_metrics(section, MetricSettings(LO, HI, 0.13, ((-2.05, 4.05),)), True)
 
     assert m.a0_per_rad == pytest.approx(0.1083 * 180.0 / math.pi, rel=1e-12)
     assert m.stall.detected is False
+    assert m.low_drag is not None
+
+
+def test_compute_metrics_without_drag_bucket_has_no_low_drag_range(section: Polar) -> None:
+    """A 4-digit-type section reports no low-drag range."""
+    m = compute_metrics(section, MetricSettings(LO, HI, 0.13, ((-2.05, 4.05),)), False)
+
+    assert m.low_drag is None
+
+
+def test_fit_spread_bent_lift_curve_gives_window_range() -> None:
+    """cl = 0.11·α for α ≤ 2, slope 0.09 above: window [−3, 2] gives a₀ = 0.11 and α_0L = 0
+    exactly; window [−3, 6] gives a smaller slope and a shifted root, so both spreads are open."""
+    a = np.round(-3.0 + 0.5 * np.arange(19), 10)
+    cl = np.where(a <= 2.0, 0.11 * a, 0.22 + 0.09 * (a - 2.0))
+    p = _polar(a, cl, np.full(a.size, 0.007), np.full(a.size, -0.05))
+
+    s = fit_spread(p, ((-3.05, 2.05), (-3.05, 6.05)))
+
+    assert s.a0_max_per_deg == pytest.approx(0.11, rel=1e-12)
+    assert s.a0_min_per_deg < 0.11
+    assert min(abs(s.alpha_0l_min_deg), abs(s.alpha_0l_max_deg)) == pytest.approx(0.0, abs=1e-12)
+    assert s.alpha_0l_max_deg - s.alpha_0l_min_deg > 0.01
 
 
 def _stall_polar(alphas: list[float], cls: list[float]) -> Polar:

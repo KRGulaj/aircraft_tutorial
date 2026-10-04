@@ -10,7 +10,10 @@ Every function uses converged points only. The definitions:
 - cl_max, α_stall: first sustained drop of cl(α) for α ≥ 0 (see `stall`).
 - cd_min: smallest cd; cl at cd_min.
 - Low-drag range: the contiguous cl range around cd_min where cd ≤ (1 + k)·cd_min, edges
-  interpolated linearly in cl.
+  interpolated linearly in cl. Only for sections with a laminar drag bucket (6-series); for a
+  4-digit section the definition only measures the width of a smooth drag polar.
+- Fit spread: a₀ and α_0L over the main window and the extra windows; max − min is the
+  uncertainty from the choice of window.
 - cm_c/4: mean quarter-chord moment over the linear window.
 - Aerodynamic centre: the moment about x is cm_x = cm_c/4 + cl·(x − 0.25) (nose-up positive,
   x aft). At the aerodynamic centre dcm_x/dcl = 0, so x_ac = 0.25 − dcm_c/4/dcl, with the slope
@@ -72,6 +75,23 @@ class LowDragRange:
 
 
 @dataclass(frozen=True)
+class FitSpread:
+    """Range of a₀ and α_0L over several linear windows.
+
+    Attributes:
+        a0_min_per_deg: Smallest lift-curve slope [1/deg].
+        a0_max_per_deg: Largest lift-curve slope [1/deg].
+        alpha_0l_min_deg: Smallest zero-lift angle [deg].
+        alpha_0l_max_deg: Largest zero-lift angle [deg].
+    """
+
+    a0_min_per_deg: float
+    a0_max_per_deg: float
+    alpha_0l_min_deg: float
+    alpha_0l_max_deg: float
+
+
+@dataclass(frozen=True)
 class SectionMetrics:
     """All characteristics of one polar.
 
@@ -80,10 +100,11 @@ class SectionMetrics:
         a0_per_deg: Lift-curve slope [1/deg].
         a0_per_rad: Lift-curve slope [1/rad].
         alpha_0l_deg: Zero-lift angle of attack [deg].
+        spread: a₀ and α_0L over the main and extra windows.
         stall: Maximum lift.
         cd_min: Minimum drag coefficient [-].
         cl_at_cd_min: Lift coefficient at cd_min [-].
-        low_drag: Low-drag range.
+        low_drag: Low-drag range; None for a section without a laminar drag bucket.
         cm_c4: Mean quarter-chord moment over the linear window [-].
         x_ac: Aerodynamic centre [chord fraction].
         ld_max: Maximum lift-to-drag ratio [-].
@@ -95,10 +116,11 @@ class SectionMetrics:
     a0_per_deg: float
     a0_per_rad: float
     alpha_0l_deg: float
+    spread: FitSpread
     stall: Stall
     cd_min: float
     cl_at_cd_min: float
-    low_drag: LowDragRange
+    low_drag: LowDragRange | None
     cm_c4: float
     x_ac: float
     ld_max: float
@@ -122,6 +144,27 @@ def lift_curve_fit(polar: Polar, alpha_min_deg: float, alpha_max_deg: float) -> 
     """
     c = _window(polar, alpha_min_deg, alpha_max_deg)
     return fit_line(c.alpha_deg, c.cl)
+
+
+def fit_spread(polar: Polar, windows: tuple[tuple[float, float], ...]) -> FitSpread:
+    """a₀ and α_0L range over several linear windows.
+
+    Args:
+        polar: Section polar.
+        windows: (min, max) windows [deg], at least one.
+
+    Returns:
+        The smallest and largest a₀ and α_0L.
+
+    Raises:
+        MetricError: If no window is given or a window holds fewer than three points.
+    """
+    if not windows:
+        raise MetricError("fit_spread: at least one window is required")
+    fits = [lift_curve_fit(polar, lo, hi) for lo, hi in windows]
+    slopes = [f.slope for f in fits]
+    roots = [f.x_intercept for f in fits]
+    return FitSpread(min(slopes), max(slopes), min(roots), max(roots))
 
 
 def stall(polar: Polar, min_drop: float = STALL_MIN_DROP,
@@ -259,12 +302,13 @@ def max_lift_to_drag(polar: Polar) -> tuple[float, float, float]:
     return float(ratio[i]), float(c.cl[i]), float(c.alpha_deg[i])
 
 
-def compute_metrics(polar: Polar, settings: MetricSettings) -> SectionMetrics:
+def compute_metrics(polar: Polar, settings: MetricSettings, drag_bucket: bool) -> SectionMetrics:
     """All characteristics of a polar.
 
     Args:
         polar: Section polar.
-        settings: Linear window and low-drag factor.
+        settings: Linear windows and low-drag factor.
+        drag_bucket: True if the section has a laminar drag bucket (low-drag range reported).
 
     Returns:
         The characteristics.
@@ -278,10 +322,11 @@ def compute_metrics(polar: Polar, settings: MetricSettings) -> SectionMetrics:
         a0_per_deg=fit.slope,
         a0_per_rad=fit.slope * 180.0 / math.pi,
         alpha_0l_deg=fit.x_intercept,
+        spread=fit_spread(polar, ((lo, hi), *settings.spread_windows_deg)),
         stall=stall(polar),
         cd_min=cd_min,
         cl_at_cd_min=cl_cd_min,
-        low_drag=low_drag_range(polar, settings.low_drag_factor),
+        low_drag=low_drag_range(polar, settings.low_drag_factor) if drag_bucket else None,
         cm_c4=quarter_chord_moment(polar, lo, hi),
         x_ac=aerodynamic_centre(polar, lo, hi),
         ld_max=ld,
