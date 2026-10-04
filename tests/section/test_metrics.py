@@ -144,6 +144,16 @@ def test_stall_single_noisy_dip_is_not_stall() -> None:
     assert (s.cl_max, s.alpha_deg) == (1.31, 12.0)
 
 
+def test_stall_ignores_negative_stall_branch() -> None:
+    """Negative stall below −10° (cl rises again toward −0.41) must not count as stall."""
+    p = _stall_polar([-13.7, -11.9, -10.3, -6.1, 0.0, 4.3, 8.9, 12.1, 13.9, 15.3, 16.7],
+                     [-0.41, -0.62, -0.83, -0.43, 0.23, 0.69, 1.13, 1.37, 1.11, 0.97, 0.88])
+
+    s = stall(p)
+
+    assert (s.cl_max, s.alpha_deg, s.detected) == (1.37, 12.1, True)
+
+
 def test_stall_not_reached_reports_lower_bound() -> None:
     """Monotonic cl: largest value returned with detected = False."""
     p = _stall_polar([0.0, 1.7, 3.3, 4.9], [0.21, 0.39, 0.57, 0.73])
