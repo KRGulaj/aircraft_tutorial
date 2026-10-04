@@ -26,6 +26,7 @@ from aircraft_tutorial.section.metrics import (
     lift_curve_fit,
     low_drag_range,
     max_lift_to_drag,
+    metrics_table,
     minimum_drag,
     quarter_chord_moment,
     stall,
@@ -213,3 +214,15 @@ def test_metrics_skip_non_converged_points() -> None:
 
     assert fit.n_points == 4
     assert fit.slope == pytest.approx(0.1083, rel=1e-12)
+
+
+def test_metrics_table_low_drag_rows_only_with_drag_bucket(section: Polar) -> None:
+    """The table holds low_drag_lower/upper only when a low-drag range exists."""
+    settings = MetricSettings(LO, HI, 0.13, ((-2.05, 4.05),))
+
+    with_bucket = [q for q, _, _ in metrics_table(compute_metrics(section, settings, True))]
+    without = [q for q, _, _ in metrics_table(compute_metrics(section, settings, False))]
+
+    assert {"low_drag_lower", "low_drag_upper"} <= set(with_bucket)
+    assert "low_drag_lower" not in without
+    assert len(with_bucket) == len(without) + 2

@@ -13,10 +13,10 @@ INPUT = Path(__file__).resolve().parents[2] / "inputs" / "section.toml"
 
 
 def test_section_toml_holds_agreed_condition() -> None:
-    """Re 8.9e6, M 0.15, Ncrit 10, 160 nodes, airfoils 2412 and 66-410."""
+    """Re 8.9e6, M 0.15, Ncrit 10, 240 nodes, airfoils 2412 and 66-410."""
     case = load_section_case(INPUT)
 
     assert (case.conditions.reynolds, case.conditions.mach, case.conditions.ncrit) == (
         8.9e6, 0.15, 10.0)
-    assert case.xfoil.panel_nodes == 160
+    assert case.xfoil.panel_nodes == 240
     assert [a.name for a in case.airfoils] == ["NACA 2412", "NACA 66-410"]

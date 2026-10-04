@@ -16,15 +16,15 @@ INPUT = Path(__file__).resolve().parents[2] / "inputs" / "section.toml"
 
 
 def test_sensitivity_cases_vary_one_setting_at_a_time() -> None:
-    """4 node cases at Ncrit 10, then 3 Ncrit cases at 160 nodes."""
+    """5 node cases at Ncrit 10, then 3 Ncrit cases at the production 240 nodes."""
     case = load_section_case(INPUT)
 
     cases = sensitivity_cases(case)
 
     assert [(c.varied, c.xfoil.panel_nodes, c.conditions.ncrit) for c in cases] == [
         ("panel_nodes", 100, 10.0), ("panel_nodes", 160, 10.0), ("panel_nodes", 240, 10.0),
-        ("panel_nodes", 320, 10.0), ("ncrit", 160, 9.0), ("ncrit", 160, 10.0),
-        ("ncrit", 160, 11.0)]
+        ("panel_nodes", 320, 10.0), ("panel_nodes", 400, 10.0), ("ncrit", 240, 9.0),
+        ("ncrit", 240, 10.0), ("ncrit", 240, 11.0)]
     assert all(c.conditions.reynolds == 8.9e6 for c in cases)
 
 

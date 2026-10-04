@@ -11,7 +11,7 @@ mach = 0.15           # inside the tunnel range M < 0.17 (Abbott p.125)
 ncrit = 10.0          # e^N: N = -8.43 - 2.4 ln(Tu) gives 9.8-11.0 for the LTPT turbulence
 
 [xfoil]
-panel_nodes = 160     # XFoil PANE default; checked by the sensitivity cases below
+panel_nodes = 240     # 160 (XFoil default) failed the 1 % check for 66-410; see sensitivity
 max_iter = 200
 alpha_low_deg = -8.0
 alpha_high_deg = 22.0 # past the tunnel stall angles (about 16 deg for 2412)
@@ -25,7 +25,7 @@ low_drag_factor = 0.10        # low-drag range: cd <= (1 + k) cd_min
 spread_windows_deg = [[-2.0, 4.0], [-6.0, 8.0]]   # a0 and alpha_0L spread = fit uncertainty
 
 [sensitivity]
-panel_nodes = [100, 160, 240, 320]
+panel_nodes = [100, 160, 240, 320, 400]
 ncrit = [9.0, 10.0, 11.0]
 
 [[airfoil]]
