@@ -8,7 +8,10 @@ For each wing of inputs/wing.toml:
 1. CL_α from the DATCOM formula of the lecture (η from inputs/wing.toml, M and Λ_0.5c of the
    cruise condition and the trapezoid);
 2. the twist that gives CL_des at zero body angle, with the chord-weighted mean twist and the
-   section α_0l of the 2D stage (results/3d_input/<section>_metrics.csv; wing/analytic.py);
+   streamwise section α_0l of the 2D stage (`alpha_0l_streamwise_deg` in
+   results/3d_input/<section>_metrics.csv; wing/analytic.py). The 2D stage analyses the section
+   normal to the sweep line; its `alpha_0l_deg` is the normal-plane angle, and the method here
+   uses streamwise angles;
 3. the lift curve over the VSPAERO angle range, drawn with the VSPAERO lift curve of
    scripts/wing_twist.py and both trim points.
 
@@ -58,7 +61,7 @@ def main() -> None:
         out_dir = OUT_DIR / entry.name
         vlm = read_polar_csv(out_dir / "polar.csv")
         history = read_twist_history(out_dir / "twist_sizing.csv")
-        alpha_0l = read_section_metrics(entry.metrics).value("alpha_0l_deg")
+        alpha_0l = read_section_metrics(entry.metrics).value("alpha_0l_streamwise_deg")
         slope = datcom_lift_slope(planform.aspect_ratio, cruise.mach, planform.sweep_deg(0.5),
                                   case.analytic.eta)
         wing = size_twist(cruise.cl_design, slope, taper=planform.taper,
@@ -132,7 +135,7 @@ def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
         "ε = (CL_des / CL_α − i_r + α_0l) / k_ε.",
         "- VSPAERO k_ε = (∂CL/∂ε) / CL_α from the first two twist-sizing runs (ε = 0 and −ε_max).",
         "",
-        "| Wing | α_0l XFoil [deg] | CL_α DATCOM [1/rad] | CL_α VSPAERO [1/rad] | Δ "
+        "| Wing | α_0l streamwise, XFoil [deg] | CL_α DATCOM [1/rad] | CL_α VSPAERO [1/rad] | Δ "
         "| k_ε DATCOM | k_ε VSPAERO | α_0L DATCOM [deg] | α_0L VSPAERO [deg] "
         "| ε DATCOM [deg] | ε VSPAERO [deg] |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
