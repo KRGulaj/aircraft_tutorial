@@ -43,6 +43,7 @@ Expected layout::
     reynolds = 4.17e7
     mach = 0.1
     ncrit = 10.0
+    sweep_deg = 37.5               # section cut normal to this sweep line; 0 = file as given
     output = "../results/3d_input"
     report_low_drag = false
 """
@@ -154,6 +155,9 @@ class ExtraRun:
     Attributes:
         label: Short name of the run.
         conditions: Flow condition.
+        sweep_deg: Sweep of the line the analysed section is cut normal to [deg]. The airfoil
+            of the coordinate file is taken as the streamwise section; 0 analyses it as given
+            (geometry.sweep).
         output: Absolute output folder.
         report_low_drag: False if no laminar low-drag range exists at this condition, even for
             a section that has one at the production condition.
@@ -161,6 +165,7 @@ class ExtraRun:
 
     label: str
     conditions: FlowConditions
+    sweep_deg: float
     output: Path
     report_low_drag: bool
 
@@ -234,7 +239,9 @@ def _extra_runs(raw: dict[str, object], base: Path) -> tuple[ExtraRun, ...]:
         if not isinstance(low_drag, bool):
             raise CaseError(f"extra_run[{i}].report_low_drag: must be true or false, "
                             f"got {low_drag!r}")
-        runs.append(ExtraRun(label, _conditions(entry, f"extra_run[{i}]"),
+        sweep = _float(entry, f"extra_run[{i}].sweep_deg")
+        _require(0.0 <= sweep < 90.0, f"extra_run[{i}].sweep_deg", sweep, "must be in [0, 90)")
+        runs.append(ExtraRun(label, _conditions(entry, f"extra_run[{i}]"), sweep,
                              (base / output).resolve(), low_drag))
     labels = [r.label for r in runs]
     if len(set(labels)) != len(labels):

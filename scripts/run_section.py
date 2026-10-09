@@ -10,8 +10,10 @@ Reads inputs/section.toml and writes:
 - results/section/metrics.csv               characteristics of all airfoils side by side
 - results/section/sensitivity.csv           one-at-a-time panel-node and Ncrit cases
 - results/section/panel_check.csv           production nodes vs finest nodes, accepted or not
-- <extra_run.output>/<airfoil>_polar.csv    polar at every [[extra_run]] condition
-- <extra_run.output>/<airfoil>_metrics.csv  its characteristics
+- <extra_run.output>/<airfoil>_section.dat  analysed section: the coordinate file cut normal
+                                            to the run's sweep line (geometry.sweep)
+- <extra_run.output>/<airfoil>_polar.csv    polar of that section at the run's condition
+- <extra_run.output>/<airfoil>_metrics.csv  its characteristics, plus alpha_0l_streamwise_deg
 
 Run from the repo root: python -m scripts.run_section
 """
@@ -26,7 +28,8 @@ from pathlib import Path
 from typing import Final
 
 from aircraft_tutorial.config.cases import SectionCase, load_section_case
-from aircraft_tutorial.geometry.airfoil import Airfoil, read_dat
+from aircraft_tutorial.geometry.airfoil import Airfoil, read_dat, write_dat
+from aircraft_tutorial.geometry.sweep import streamwise_angle_deg, sweep_normal_section
 from aircraft_tutorial.section.metrics import (
     MetricError,
     SectionMetrics,
@@ -146,16 +149,27 @@ def _panel_check(case: SectionCase, rows: list[dict[str, str]]) -> list[dict[str
 
 
 def _extra_runs(case: SectionCase, sections: dict[str, Airfoil]) -> None:
-    """Polar and characteristics of every airfoil at every [[extra_run]] condition."""
+    """Polar and characteristics of the sweep-normal section of every airfoil at every
+    [[extra_run]] condition.
+
+    The zero-lift angle is also given in the streamwise plane, tan α_0l,s = tan α_0l,n·cos Λ,
+    the value a wing method with streamwise sections needs.
+    """
     for run in case.extra_runs:
         run.output.mkdir(parents=True, exist_ok=True)
         for entry in case.airfoils:
-            polar = run_polar(sections[entry.name], run.conditions, case.xfoil)
+            section = sweep_normal_section(sections[entry.name], run.sweep_deg)
             stem = slug(entry.name)
+            write_dat(section, run.output / f"{stem}_section.dat",
+                      f"{section.name} (from {entry.path.name}, y/c divided by cos sweep)")
+            polar = run_polar(section, run.conditions, case.xfoil)
             write_csv(polar, run.output / f"{stem}_polar.csv")
             m = compute_metrics(polar, case.metrics, entry.drag_bucket and run.report_low_drag)
+            rows = metrics_table(m) + [
+                ("alpha_0l_streamwise_deg", streamwise_angle_deg(m.alpha_0l_deg, run.sweep_deg),
+                 "deg")]
             _write_rows(run.output / f"{stem}_metrics.csv", [
-                {"quantity": q, "value": f"{v:.6g}", "unit": u} for q, v, u in metrics_table(m)])
+                {"quantity": q, "value": f"{v:.6g}", "unit": u} for q, v, u in rows])
             logger.info("%s %s: %d/%d points converged, stall detected: %s", run.label,
                         entry.name, int(polar.converged.sum()), polar.converged.size,
                         m.stall.detected)
