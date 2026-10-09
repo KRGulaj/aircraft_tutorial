@@ -6,8 +6,8 @@
 CLAUDE.md
 .claude/
 
-# assignment brief and report drafts
-docs/reports/
+# assignment brief, books, plans and report drafts
+docs/
 
 __pycache__/
 *.py[cod]

@@ -38,16 +38,22 @@ name = "NACA 66-410"
 file = "../airfoils/NACA66-410_gen.dat"
 drag_bucket = true
 
-# Polars for the 3D stage (group decision): normal-plane Reynolds number at cruise,
+# Polars for the 3D stage (group decision): simple sweep theory on the quarter-chord line.
+# The 3D model (VSPAERO) places the coordinate file streamwise. The section normal to the sweep
+# line has the same thickness on the chord c cos(sweep), so its y/c is the file's divided by
+# cos(37.5 deg) = 0.7934: t/c_n = 0.151 for the 2412, 0.126 for the 66-410 (geometry/sweep.py).
+# Normal-plane Reynolds number at cruise,
 #   Re_n = rho V c_MAC / mu * cos^2(sweep_c/4)
 #        = 0.37960 * 253.54 * 9.855 / 1.4334e-5 * cos^2(37.5 deg) = 6.617e7 * 0.6294 = 4.165e7,
 # at low Mach number: XFoil's Karman-Tsien correction is not valid at the cruise normal Mach
 # number (0.68), so compressibility is corrected in the 3D tool (VSP). At this Reynolds number
-# the 66-410 has no laminar drag bucket (cd_min at cl = 0.03), so no low-drag range is reported.
+# the normal 66-410 section has no laminar drag bucket (cd rises steadily from cd_min at
+# cl_n = 0.10), so no low-drag range is reported.
 [[extra_run]]
 label = "3d_input"
 reynolds = 4.17e7
 mach = 0.1
 ncrit = 10.0
+sweep_deg = 37.5      # inputs/wing.toml: planform.sweep_quarter_chord_deg
 output = "../results/3d_input"
 report_low_drag = false

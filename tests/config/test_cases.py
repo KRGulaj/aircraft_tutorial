@@ -51,6 +51,7 @@ label = "3d_input"
 reynolds = 4.17e7
 mach = 0.1
 ncrit = 10.0
+sweep_deg = 37.5
 output = "../results/3d_input"
 report_low_drag = false
 """
@@ -80,6 +81,7 @@ def test_load_section_case_valid_file_returns_every_value(tmp_path: Path) -> Non
     assert [a.drag_bucket for a in case.airfoils] == [False, True]
     assert case.extra_runs[0].label == "3d_input"
     assert case.extra_runs[0].conditions.reynolds == 4.17e7
+    assert case.extra_runs[0].sweep_deg == 37.5
     assert case.extra_runs[0].output == (tmp_path / "results" / "3d_input").resolve()
     assert case.extra_runs[0].report_low_drag is False
     assert case.sensitivity.panel_nodes == (100, 160, 240, 320)
@@ -108,12 +110,16 @@ def test_load_section_case_valid_file_returns_every_value(tmp_path: Path) -> Non
         ("reynolds = 4.17e7", "reynolds = 0.0", "extra_run[0].reynolds"),
         ('label = "3d_input"', "", "extra_run[0].label"),
         ("report_low_drag = false", "", "extra_run[0].report_low_drag"),
+        ("sweep_deg = 37.5", "", "extra_run[0].sweep_deg"),
+        ("sweep_deg = 37.5", "sweep_deg = -3.5", "extra_run[0].sweep_deg"),
+        ("sweep_deg = 37.5", "sweep_deg = 90.0", "extra_run[0].sweep_deg"),
     ],
     ids=[
         "missing_key", "negative_re", "nan_mach", "supersonic", "too_many_nodes",
         "float_nodes", "bool_as_int", "alpha_range_without_zero", "zero_k",
         "empty_list", "too_few_nodes", "missing_file", "duplicate_name", "bucket_not_bool",
         "reversed_window", "extra_zero_re", "extra_no_label", "extra_no_low_drag_flag",
+        "extra_no_sweep", "extra_negative_sweep", "extra_sweep_90",
     ],
 )
 def test_load_section_case_invalid_value_raises_naming_key(
