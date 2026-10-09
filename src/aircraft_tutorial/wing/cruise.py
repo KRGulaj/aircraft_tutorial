@@ -72,6 +72,12 @@ class CruisePoint:
     cp_crit_normal: float
 
     @property
+    def flow_label(self) -> str:
+        """Flow condition for plot titles: M and the MAC Reynolds number (the brief asks every
+        aerodynamic plot to state Re and M)."""
+        return f"M = {self.mach:.3f}, Re_MAC = {self.reynolds_mac:.3g}, h = {self.altitude_m:.0f} m"
+
+    @property
     def reynolds_per_m(self) -> float:
         """Unit Reynolds number ρ·V / μ [1/m]."""
         return self.density_kg_m3 * self.velocity_m_s / self.dynamic_viscosity_pa_s

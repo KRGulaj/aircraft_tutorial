@@ -93,8 +93,12 @@ def main() -> None:
 
     results = [_analyse(case, entry, planform, cruise) for entry in case.wings]
 
+    sections = ", ".join(sorted({f"Re = {r.section.reynolds:.3g}, M = {r.section.mach}"
+                                 for r in results}))
     plot_drag_polars([_plot_data(r) for r in results], cruise.cl_design,
-                     f"Drag polars of the sized wings (M = {cruise.mach:.3f})",
+                     f"Drag polars of the sized wings\n"
+                     f"wing: {cruise.flow_label}\n"
+                     f"section polars: {sections}",
                      OUT_DIR / "drag_polars.png")
     (OUT_DIR / "drag_summary.md").write_text(_summary(case, planform, cruise, results),
                                              encoding="utf-8")
@@ -156,7 +160,9 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
     result = WingDrag(entry, section, lookup, chord_ref, thickness, columns,
                       _trim(columns, cruise.cl_design))
     plot_drag_build_up(_plot_data(result), cruise.cl_design,
-                       f"{entry.name} ({entry.airfoil.stem}) drag polar, M = {cruise.mach:.3f}",
+                       f"{entry.name} ({entry.airfoil.stem}) drag polar\n"
+                       f"wing: {cruise.flow_label}\n"
+                       f"section polar: Re = {section.reynolds:.3g}, M = {section.mach}",
                        out_dir / "drag_polar.png")
     return result
 

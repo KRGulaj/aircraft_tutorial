@@ -13,7 +13,7 @@ For each wing of inputs/wing.toml:
    scripts/wing_twist.py and both trim points.
 
 Writes analytic_lift.csv and lift_curve_comparison.png to results/wing/<name>/, and
-analytic_summary.md to results/wing/.
+analytic_summary.md and lift_curves_all.png (every wing, both methods) to results/wing/.
 
 Needs no OpenVSP. Run from the repo root, after scripts.wing_twist: python -m scripts.wing_analytic
 """
@@ -53,6 +53,7 @@ def main() -> None:
     cruise = cruise_point(case.cruise.mach, case.cruise.altitude_m, case.aircraft.design_mass_kg,
                           planform.area_m2, planform.mac_m, planform.sweep_quarter_chord_deg)
     rows: list[str] = []
+    all_curves: list[LiftCurve] = []
     for entry in case.wings:
         out_dir = OUT_DIR / entry.name
         vlm = read_polar_csv(out_dir / "polar.csv")
@@ -67,14 +68,19 @@ def main() -> None:
         print(f"{entry.name}: CL_alpha = {slope:.4f} /rad, twist = {wing.twist_deg:+.3f} deg "
               f"(VSPAERO {history[-1][0]:+.3f} deg)")
         _write_lift(vlm, wing, out_dir / "analytic_lift.csv")
-        plot_lift_curves(
-            [LiftCurve(f"{entry.name} VSPAERO, ε = {history[-1][0]:+.2f}°", vlm.alpha_deg,
-                       vlm.cl, 0.0, cruise.cl_design),
-             LiftCurve(f"{entry.name} DATCOM, ε = {wing.twist_deg:+.2f}°", vlm.alpha_deg,
-                       wing.cl(vlm.alpha_deg), 0.0, cruise.cl_design)],
-            cruise.cl_design, f"{entry.name} ({entry.airfoil.stem}): VSPAERO and DATCOM",
-            out_dir / "lift_curve_comparison.png")
+        curves = [LiftCurve(f"{entry.name} VSPAERO, ε = {history[-1][0]:+.2f}°", vlm.alpha_deg,
+                            vlm.cl, 0.0, cruise.cl_design),
+                  LiftCurve(f"{entry.name} DATCOM, ε = {wing.twist_deg:+.2f}°", vlm.alpha_deg,
+                            wing.cl(vlm.alpha_deg), 0.0, cruise.cl_design)]
+        all_curves += curves
+        plot_lift_curves(curves, cruise.cl_design,
+                         f"{entry.name} ({entry.airfoil.stem}): VSPAERO and DATCOM\n"
+                         f"{cruise.flow_label}",
+                         out_dir / "lift_curve_comparison.png")
         rows.append(_row(entry.name, alpha_0l, wing, vlm, history))
+    plot_lift_curves(all_curves, cruise.cl_design,
+                     f"Sized wings, VSPAERO and DATCOM\n{cruise.flow_label}",
+                     OUT_DIR / "lift_curves_all.png")
     (OUT_DIR / "analytic_summary.md").write_text(_summary(case, planform, cruise, rows),
                                                  encoding="utf-8")
     print(f"Results in {OUT_DIR}")

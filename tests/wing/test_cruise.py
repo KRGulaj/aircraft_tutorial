@@ -33,6 +33,11 @@ def test_cruise_point_b747_matches_hand_calculation() -> None:
     assert B747.reynolds_mac == pytest.approx(6.62e7, rel=2e-3)
 
 
+def test_flow_label_states_mach_and_reynolds() -> None:
+    """Plot titles get M and Re_MAC."""
+    assert B747.flow_label == "M = 0.855, Re_MAC = 6.62e+07, h = 10668 m"
+
+
 def test_reynolds_of_mac_matches_field() -> None:
     """reynolds(MAC) is the stored Re_MAC; reynolds_normal(MAC) is the stored Re_n."""
     assert B747.reynolds(9.855) == pytest.approx(B747.reynolds_mac, rel=1e-12)

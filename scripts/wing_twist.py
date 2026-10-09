@@ -114,8 +114,8 @@ def main() -> None:
     results = [_analyse(case, entry, planform, reference, flow, cruise) for entry in case.wings]
 
     plot_lift_curves([_curve(r, cruise.cl_design) for r in results], cruise.cl_design,
-                     "Lift curves of the sized wings (VSPAERO, M = "
-                     f"{cruise.mach:.3f})", OUT_DIR / "lift_curves.png")
+                     f"Lift curves of the sized wings, VSPAERO\n{cruise.flow_label}",
+                     OUT_DIR / "lift_curves.png")
     (OUT_DIR / "twist_summary.md").write_text(_summary(case, planform, cruise, results),
                                               encoding="utf-8")
     print(f"Results in {OUT_DIR}")
@@ -167,7 +167,8 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
     result = _wing_result(entry, sizing, polar, cruise.cl_design, planform.aspect_ratio,
                           twist_deviation)
     plot_lift_curves([_curve(result, cruise.cl_design)], cruise.cl_design,
-                     f"{entry.name} ({entry.airfoil.stem}), twist {sizing.twist_deg:+.2f}°",
+                     f"{entry.name} ({entry.airfoil.stem}), twist {sizing.twist_deg:+.2f}°, "
+                     f"VSPAERO\n{cruise.flow_label}",
                      out_dir / "lift_curve.png")
     return result
 

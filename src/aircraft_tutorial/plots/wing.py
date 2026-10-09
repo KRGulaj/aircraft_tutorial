@@ -19,6 +19,10 @@ import numpy as np  # noqa: E402
 from numpy.typing import NDArray  # noqa: E402
 
 
+_LINESTYLES: tuple[str, ...] = ("-", "--", ":", "-.")
+_MARKERS: tuple[str, ...] = ("o", "s", "^", "D")
+
+
 @dataclass(frozen=True)
 class LiftCurve:
     """One lift curve to draw.
@@ -48,8 +52,12 @@ def plot_lift_curves(curves: list[LiftCurve], cl_design: float, title: str, path
         path: Output image path.
     """
     fig, ax = plt.subplots(figsize=(6.4, 4.8))
-    for curve in curves:
-        (line,) = ax.plot(curve.alpha_deg, curve.cl, marker="o", markersize=3, label=curve.label)
+    for i, curve in enumerate(curves):
+        # Curves of wings sized to the same CL_des lie on top of each other: distinct line
+        # styles and open markers keep every one visible.
+        (line,) = ax.plot(curve.alpha_deg, curve.cl, linestyle=_LINESTYLES[i % len(_LINESTYLES)],
+                          marker=_MARKERS[i % len(_MARKERS)], markersize=5,
+                          markerfacecolor="none", label=curve.label)
         ax.plot(curve.trim_alpha_deg, curve.trim_cl, marker="*", markersize=14,
                 color=line.get_color(), markeredgecolor="black", linestyle="none",
                 label=f"{curve.label} trim: α = {curve.trim_alpha_deg:.2f}°, "
@@ -60,7 +68,7 @@ def plot_lift_curves(curves: list[LiftCurve], cl_design: float, title: str, path
     ax.axvline(0.0, color="black", linewidth=0.6)
     ax.set_xlabel("body angle of attack α [deg]")
     ax.set_ylabel("CL [-]")
-    ax.set_title(title)
+    ax.set_title(title, fontsize=10)
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=8)
     fig.tight_layout()
@@ -147,7 +155,7 @@ def _finish(ax: Axes, cl_design: float, title: str, path: Path, fig: Figure) -> 
     ax.set_xlim(left=0.0)
     ax.set_xlabel("CD [-]")
     ax.set_ylabel("CL [-]")
-    ax.set_title(title)
+    ax.set_title(title, fontsize=10)
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=7)
     fig.tight_layout()
