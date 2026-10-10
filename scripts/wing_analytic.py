@@ -31,7 +31,12 @@ from typing import Final
 from aircraft_tutorial.common.fitting import fit_line
 from aircraft_tutorial.config.wing import WingCase, load_wing_case
 from aircraft_tutorial.contracts.section_metrics import read_section_metrics
-from aircraft_tutorial.plots.wing import LiftCurve, plot_lift_curves
+from aircraft_tutorial.plots.wing import (
+    LiftCurve,
+    flight_conditions,
+    plot_lift_curves,
+    section_label,
+)
 from aircraft_tutorial.wing.analytic import (
     AnalyticWing,
     datcom_lift_slope,
@@ -57,6 +62,10 @@ def main() -> None:
                           planform.area_m2, planform.mac_m, planform.sweep_quarter_chord_deg)
     rows: list[str] = []
     all_curves: list[LiftCurve] = []
+    conditions = ["VSPAERO (vortex lattice) and DATCOM, isolated wing",
+                  flight_conditions(cruise.mach, cruise.reynolds_mac, cruise.altitude_m),
+                  rf"Root incidence $i_r$ = {case.twist.root_incidence_deg:+.1f}°, "
+                  rf"DATCOM $\eta$ = {case.analytic.eta}"]
     for entry in case.wings:
         out_dir = OUT_DIR / entry.name
         vlm = read_polar_csv(out_dir / "polar.csv")
@@ -71,18 +80,20 @@ def main() -> None:
         print(f"{entry.name}: CL_alpha = {slope:.4f} /rad, twist = {wing.twist_deg:+.3f} deg "
               f"(VSPAERO {history[-1][0]:+.3f} deg)")
         _write_lift(vlm, wing, out_dir / "analytic_lift.csv")
-        curves = [LiftCurve(f"{entry.name} VSPAERO, ε = {history[-1][0]:+.2f}°", vlm.alpha_deg,
-                            vlm.cl, 0.0, cruise.cl_design),
-                  LiftCurve(f"{entry.name} DATCOM, ε = {wing.twist_deg:+.2f}°", vlm.alpha_deg,
-                            wing.cl(vlm.alpha_deg), 0.0, cruise.cl_design)]
+        curves = [LiftCurve(rf"{entry.name} VSPAERO, $\varepsilon$ = {history[-1][0]:+.2f}°",
+                            vlm.alpha_deg, vlm.cl, 0.0, cruise.cl_design),
+                  LiftCurve(rf"{entry.name} DATCOM, $\varepsilon$ = {wing.twist_deg:+.2f}°",
+                            vlm.alpha_deg, wing.cl(vlm.alpha_deg), 0.0, cruise.cl_design)]
         all_curves += curves
         plot_lift_curves(curves, cruise.cl_design,
-                         f"{entry.name} ({entry.airfoil.stem}): VSPAERO and DATCOM\n"
-                         f"{cruise.flow_label}",
-                         out_dir / "lift_curve_comparison.png")
+                         f"{entry.name} ({section_label(entry.airfoil.stem)}): lift curve, "
+                         "VSPAERO and DATCOM",
+                         conditions, out_dir / "lift_curve_comparison.png")
         rows.append(_row(entry.name, alpha_0l, wing, vlm, history))
     plot_lift_curves(all_curves, cruise.cl_design,
-                     f"Sized wings, VSPAERO and DATCOM\n{cruise.flow_label}",
+                     "Lift curves of the sized clean wings, VSPAERO and DATCOM",
+                     conditions + [r"All wings are sized to $C_{L,des}$ at $\alpha$ = 0: the "
+                                   "curves coincide"],
                      OUT_DIR / "lift_curves_all.png")
     (OUT_DIR / "analytic_summary.md").write_text(_summary(case, planform, cruise, rows),
                                                  encoding="utf-8")

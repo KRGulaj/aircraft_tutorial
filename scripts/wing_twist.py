@@ -28,7 +28,12 @@ import numpy as np
 from aircraft_tutorial.common.fitting import fit_line
 from aircraft_tutorial.config.wing import WingCase, WingEntry, load_wing_case
 from aircraft_tutorial.geometry.airfoil import read_dat
-from aircraft_tutorial.plots.wing import LiftCurve, plot_lift_curves
+from aircraft_tutorial.plots.wing import (
+    LiftCurve,
+    flight_conditions,
+    plot_lift_curves,
+    section_label,
+)
 from aircraft_tutorial.wing import vlm_results, vsp_model, vspaero
 from aircraft_tutorial.wing.cruise import CruisePoint, cruise_point
 from aircraft_tutorial.wing.planform import TrapezoidalPlanform
@@ -114,7 +119,10 @@ def main() -> None:
     results = [_analyse(case, entry, planform, reference, flow, cruise) for entry in case.wings]
 
     plot_lift_curves([_curve(r, cruise.cl_design) for r in results], cruise.cl_design,
-                     f"Lift curves of the sized wings, VSPAERO\n{cruise.flow_label}",
+                     "Lift curves of the sized clean wings (VSPAERO)",
+                     _conditions(case, cruise) + [
+                         r"Both wings are sized to $C_{L,des}$ at $\alpha$ = 0: the curves "
+                         "coincide"],
                      OUT_DIR / "lift_curves.png")
     (OUT_DIR / "twist_summary.md").write_text(_summary(case, planform, cruise, results),
                                               encoding="utf-8")
@@ -167,15 +175,24 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
     result = _wing_result(entry, sizing, polar, cruise.cl_design, planform.aspect_ratio,
                           twist_deviation)
     plot_lift_curves([_curve(result, cruise.cl_design)], cruise.cl_design,
-                     f"{entry.name} ({entry.airfoil.stem}), twist {sizing.twist_deg:+.2f}°, "
-                     f"VSPAERO\n{cruise.flow_label}",
-                     out_dir / "lift_curve.png")
+                     f"{entry.name} ({section_label(entry.airfoil.stem)}): lift curve of the "
+                     "clean wing (VSPAERO)",
+                     _conditions(case, cruise), out_dir / "lift_curve.png")
     return result
+
+
+def _conditions(case: WingCase, cruise: CruisePoint) -> list[str]:
+    """Condition-box lines of the VSPAERO lift-curve figures."""
+    return ["VSPAERO (vortex lattice), isolated wing",
+            flight_conditions(cruise.mach, cruise.reynolds_mac, cruise.altitude_m),
+            rf"Root incidence $i_r$ = {case.twist.root_incidence_deg:+.1f}°, linear twist"]
 
 
 def _curve(result: WingResult, cl_design: float) -> LiftCurve:
     """Lift curve of one wing with its trim point."""
-    return LiftCurve(label=result.entry.name, alpha_deg=result.polar.alpha_deg,
+    label = (f"{result.entry.name} ({section_label(result.entry.airfoil.stem)}), "
+             rf"$\varepsilon$ = {result.sizing.twist_deg:+.2f}°")
+    return LiftCurve(label=label, alpha_deg=result.polar.alpha_deg,
                      cl=result.polar.cl, trim_alpha_deg=result.trim_alpha_deg, trim_cl=cl_design)
 
 

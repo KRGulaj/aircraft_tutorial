@@ -28,7 +28,7 @@ class VlmPolar:
     Attributes:
         alpha_deg: Body angle of attack [deg].
         cl: Lift coefficient [-].
-        cdi: Induced drag coefficient, Trefftz plane [-].
+        cdi: Induced drag coefficient, far-field [-].
         cmy: Pitching-moment coefficient about the reference point [-].
     """
 

@@ -41,7 +41,7 @@ alpha_end_deg = 10.0
 alpha_npts = 15                 # 1 deg step, so 0 deg (the trim point) is a computed point
 
 [drag]
-# CD = CDi (VSPAERO, Trefftz plane) + CD_profile (XFoil polar, strip by strip) + CD_wave (Korn + ADSEE)
+# CD = CDi (VSPAERO, far-field) + CD_profile (XFoil polar, strip by strip) + CD_wave (Korn + ADSEE)
 korn_sweep_chord_fraction = 0.5          # half-chord sweep in the swept Korn equation
 # strip cd is scaled from the polar's Re to the strip's like the lecture's flat-plate skin
 # friction (ADSEE-2, "Flat plate skin friction coefficient"; wing/skin_friction.py):

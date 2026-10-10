@@ -4,8 +4,8 @@
 """VSPAERO vortex-lattice angle-of-attack sweep of the model in memory, and its results.
 
 The wing is analysed as a thin (camber) surface with y-symmetry. Kept from VSPAERO: CL, the
-pitching moment CMy about the reference point, the wake (Trefftz-plane) induced drag CDiw and the
-spanwise strip loads. VSPAERO's own CDo, a flat-plate skin-friction estimate, is not used; the
+pitching moment CMy about the reference point, the far-field induced drag CDiw (from the wake)
+and the spanwise strip loads. VSPAERO's own CDo, a flat-plate skin-friction estimate, is not used; the
 profile drag comes from the XFoil section polars.
 
 Compressibility enters through VSPAERO's Prandtl-Glauert correction at the run Mach number.
