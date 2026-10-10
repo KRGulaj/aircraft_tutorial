@@ -20,10 +20,10 @@ from pathlib import Path
 from typing import Final
 
 import numpy as np
-import openvsp as vsp
 from numpy.typing import NDArray
 
 from aircraft_tutorial.config.wing import VlmSettings
+from aircraft_tutorial.wing.openvsp_api import vsp
 from aircraft_tutorial.wing.vlm_results import StripLoads, VlmPolar
 
 _STRIP_COLUMNS: Final[tuple[str, ...]] = ("alpha_deg", "y_m", "chord_m", "area_m2", "cl")
@@ -140,7 +140,7 @@ def run_sweep(vsp3_path: Path, reference: Reference, flow: FlowInput, vlm: VlmSe
     vsp.ExecAnalysis(a)
 
     errors = vsp.ErrorMgrSingleton.getInstance()
-    messages = []
+    messages: list[str] = []
     while errors.GetNumTotalErrors() > 0:
         messages.append(str(errors.PopLastError().GetErrorString()))
     polar = _read_polar()

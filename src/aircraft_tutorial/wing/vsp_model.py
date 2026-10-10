@@ -23,10 +23,10 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import openvsp as vsp
 from numpy.typing import NDArray
 
 from aircraft_tutorial.config.wing import VlmSettings
+from aircraft_tutorial.wing.openvsp_api import vsp
 from aircraft_tutorial.geometry.airfoil import Airfoil, normalized
 from aircraft_tutorial.wing.planform import TrapezoidalPlanform
 

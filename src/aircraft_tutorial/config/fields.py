@@ -10,6 +10,7 @@ an error message points straight at the line to fix.
 from __future__ import annotations
 
 import math
+from typing import cast
 
 from aircraft_tutorial.config.cases import CaseError
 
@@ -23,7 +24,7 @@ def table(raw: dict[str, object], key: str) -> dict[str, object]:
     value = raw.get(key)
     if not isinstance(value, dict):
         raise CaseError(f"[{key}]: required table is missing")
-    return value
+    return cast(dict[str, object], value)  # a TOML table: its keys are str
 
 
 def number(t: dict[str, object], dotted: str) -> float:

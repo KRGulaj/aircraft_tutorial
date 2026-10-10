@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Mateusz Suszynski
 # Created: 2026-10-04
+# matplotlib annotates the **kwargs of Axes.plot, axhline, set_title, legend, savefig etc. as
+# untyped, so strict pyright reports every call as partially unknown. The check is off for
+# member types in this file only; all arguments passed here are typed.
+# pyright: reportUnknownMemberType=false
 """Figures of the 3D wing analysis: the lift curve and the drag polar, each with the trim point."""
 
 from __future__ import annotations

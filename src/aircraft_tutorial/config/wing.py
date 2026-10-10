@@ -69,7 +69,7 @@ import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 from aircraft_tutorial.common.atmosphere import H_MAX
 from aircraft_tutorial.config.cases import CaseError
@@ -368,9 +368,10 @@ def _wings(raw: dict[str, object], base: Path) -> tuple[WingEntry, ...]:
     if not isinstance(entries, list) or not entries:
         raise CaseError("[[wing]]: at least one wing entry is required")
     result: list[WingEntry] = []
-    for i, entry in enumerate(entries):
-        if not isinstance(entry, dict):
-            raise CaseError(f"wing[{i}]: must be a table, got {entry!r}")
+    for i, item in enumerate(cast(list[object], entries)):
+        if not isinstance(item, dict):
+            raise CaseError(f"wing[{i}]: must be a table, got {item!r}")
+        entry = cast(dict[str, object], item)  # a TOML table: its keys are str
         name = string(entry, f"wing[{i}].name")
         require(_WING_NAME.match(name) is not None, f"wing[{i}].name", name,
                 "only letters, digits, '-' and '_' (it becomes a directory name)")
