@@ -57,8 +57,8 @@ def test_plots_write_one_png_each(tmp_path: Path) -> None:
     """Each figure is written as one PNG file and nothing else."""
     curve = LiftCurve("WING-1", ALPHA, CL, 0.0, 0.55)
     polar = DragPolar("WING-1", CL, np.array([0.006, 0.012, 0.020]),
-                      np.array([0.006, 0.006, 0.007]), np.array([0.008, 0.011, 0.016]),
-                      0.55, 0.029)
+                      np.array([0.006, 0.006, 0.007]), np.array([0.003, 0.003, 0.0035]),
+                      np.array([0.008, 0.011, 0.016]), 1.0, 0.499, 0.55, 0.029, 0.026)
 
     plot_lift_curves([curve, curve], 0.55, "Lift", ["line 1"], tmp_path / "lift.png")
     plot_drag_build_up(polar, 0.55, "Build-up", ["line 1"], tmp_path / "build.png")

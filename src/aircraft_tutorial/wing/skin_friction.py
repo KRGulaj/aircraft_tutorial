@@ -78,9 +78,20 @@ class FrictionModel:
             reynolds: Actual Reynolds number ρ·V·l / μ [-].
             length_m: Run length l the Reynolds number is based on [m].
         """
-        re = self.effective_reynolds(reynolds, length_m)
+        return self._weighted_cf(self.effective_reynolds(reynolds, length_m))
+
+    def smooth_cf(self, reynolds: NDArray[np.float64] | float) -> NDArray[np.float64]:
+        """Skin-friction coefficient of a hydraulically smooth wall: no roughness cutoff [-].
+
+        Args:
+            reynolds: Reynolds number ρ·V·l / μ [-].
+        """
+        return self._weighted_cf(np.asarray(reynolds, dtype=np.float64))
+
+    def _weighted_cf(self, reynolds: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Laminar and turbulent C_f weighted by the laminar fraction, at this Mach number."""
         x = self.laminar_fraction
-        return x * laminar_cf(re) + (1.0 - x) * turbulent_cf(re, self.mach)
+        return x * laminar_cf(reynolds) + (1.0 - x) * turbulent_cf(reynolds, self.mach)
 
 
 def laminar_cf(reynolds: NDArray[np.float64] | float) -> NDArray[np.float64]:

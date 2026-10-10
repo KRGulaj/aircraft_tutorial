@@ -12,10 +12,11 @@ Reads, for each wing of inputs/wing.toml:
   MAC at cruise, at low Mach number (group decision, inputs/section.toml); compressibility is
   added here through the Korn wave drag.
 
-Strip cd is scaled from the polar's Reynolds number to the strip's with the lecture's flat-plate
-skin friction (wing/skin_friction.py, wing/profile_drag.py). The reference chord of that scaling is the streamwise chord whose
-sweep-normal Reynolds number equals the polar's, c_ref = Re_polar / (Re_n per metre); it is the
-MAC when the polar was run at Re_n of the MAC.
+Strip cd is scaled from the polar to the strip in flight with the lecture's flat-plate skin
+friction, k_Re = C_f(strip: cruise M, paint roughness) / C_f(polar: smooth, polar's M)
+(wing/skin_friction.py, wing/profile_drag.py). The reference chord of that scaling is the
+streamwise chord whose sweep-normal Reynolds number equals the polar's,
+c_ref = Re_polar / (Re_n per metre); it is the MAC when the polar was run at Re_n of the MAC.
 
 Writes drag_polar.csv, strip_drag.csv and drag_polar.png to results/wing/<name>/, and
 drag_polars.png and drag_summary.md to results/wing/.
@@ -102,7 +103,8 @@ def main() -> None:
 
     sections = sorted({section_conditions(r.section.reynolds, r.section.mach)
                        for r in results})
-    plot_drag_polars([_plot_data(r) for r in results], cruise.cl_design,
+    k_sweep = _sweep_factors(case, planform)
+    plot_drag_polars([_plot_data(r, k_sweep) for r in results], cruise.cl_design,
                      "Drag polars of the sized isolated wings",
                      [flight_conditions(cruise.mach, cruise.reynolds_mac, cruise.altitude_m),
                       *sections], OUT_DIR / "drag_polars.png")
@@ -123,12 +125,16 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
     thickness = max_thickness(normalized(read_dat(entry.airfoil)))[0]
     sweep_korn = planform.sweep_deg(case.drag.korn_sweep_chord_fraction)
     sweep = planform.sweep_quarter_chord_deg
-    friction = FrictionModel(mach=section.mach, roughness_m=case.drag.roughness_m,
-                             cutoff_regime=case.drag.cutoff_regime,
-                             laminar_fraction=case.drag.laminar_fraction)
+    # The wing in flight: cruise Mach number and paint roughness. The transonic cutoff formula
+    # (cutoff_regime) is chosen for this Mach number. The polar side of the C_f ratio is a
+    # smooth wall at the polar's own Mach number (profile_drag.reynolds_factor).
+    flight = FrictionModel(mach=cruise.mach, roughness_m=case.drag.roughness_m,
+                           cutoff_regime=case.drag.cutoff_regime,
+                           laminar_fraction=case.drag.laminar_fraction)
     if abs(section.mach - cruise.mach_normal) > MACH_TOLERANCE:
         print(f"note {entry.name}: polar at M = {section.mach}, not M_n = "
-              f"{cruise.mach_normal:.4f}; compressibility only through the wave drag")
+              f"{cruise.mach_normal:.4f}; profile drag gets compressibility only through the "
+              "skin-friction scaling")
     print(f"{entry.name}: polar {entry.polar.name} ({section.airfoil}, Re = {section.reynolds:.4g}, "
           f"M = {section.mach}), c_ref = {chord_ref:.3f} m, usable cl_n "
           f"[{lookup.cl[0]:.3f}, {lookup.cl[-1]:.3f}], t/c = {thickness:.4f}")
@@ -139,11 +145,12 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
         s = strips.at_alpha(float(alpha))
         out, cd_prof = pd.strip_profile_drag(
             s, lookup, sweep_deg=sweep, chord_ref_m=chord_ref, reynolds_ref=section.reynolds,
-            area_m2=planform.area_m2, mode=case.drag.sweep_drag_mode, friction=friction)
+            polar_mach=section.mach, area_m2=planform.area_m2,
+            mode=case.drag.sweep_drag_mode, flight=flight)
         _, cd_prof_sens = pd.strip_profile_drag(
             s, lookup, sweep_deg=sweep, chord_ref_m=chord_ref, reynolds_ref=section.reynolds,
-            area_m2=planform.area_m2, mode=case.drag.sensitivity_sweep_drag_mode,
-            friction=friction)
+            polar_mach=section.mach, area_m2=planform.area_m2,
+            mode=case.drag.sensitivity_sweep_drag_mode, flight=flight)
         m_dd = korn_mdd(entry.kappa_a, thickness, float(cl), sweep_korn)
         cd_wave = wave_drag(cruise.mach, m_dd)
         cd = float(cdi) + cd_prof + cd_wave
@@ -165,7 +172,7 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
 
     result = WingDrag(entry, section, lookup, chord_ref, thickness, columns,
                       _trim(columns, cruise.cl_design))
-    plot_drag_build_up(_plot_data(result), cruise.cl_design,
+    plot_drag_build_up(_plot_data(result, _sweep_factors(case, planform)), cruise.cl_design,
                        f"{entry.name} ({section_label(entry.airfoil.stem)}): drag polar of the "
                        "isolated wing",
                        [flight_conditions(cruise.mach, cruise.reynolds_mac, cruise.altitude_m),
@@ -188,12 +195,27 @@ def _trim(columns: dict[str, NDArray[np.float64]], cl_design: float) -> dict[str
     return {k: float(np.interp(cl_design, cl, v[ok])) for k, v in columns.items()}
 
 
-def _plot_data(r: WingDrag) -> DragPolar:
-    """Finite part of a wing's drag polar, for the figures."""
+def _sweep_factors(case: WingCase, planform: TrapezoidalPlanform) -> tuple[float, float]:
+    """Baseline and sensitivity sweep factors k_Λ of the profile drag [-]."""
+    sweep = planform.sweep_quarter_chord_deg
+    return (pd.sweep_drag_factor(case.drag.sweep_drag_mode, sweep),
+            pd.sweep_drag_factor(case.drag.sensitivity_sweep_drag_mode, sweep))
+
+
+def _plot_data(r: WingDrag, k_sweep: tuple[float, float]) -> DragPolar:
+    """Finite part of a wing's drag polar, for the figures.
+
+    Args:
+        r: Drag polar of the wing.
+        k_sweep: Baseline and bounding sweep factors k_Λ [-].
+    """
     ok = np.isfinite(r.columns["cd"])
     return DragPolar(label=r.entry.name, cl=r.columns["cl"][ok], cdi=r.columns["cdi"][ok],
-                     cd_profile=r.columns["cd_profile"][ok], cd_wave=r.columns["cd_wave"][ok],
-                     trim_cl=r.trim["cl"], trim_cd=r.trim["cd"])
+                     cd_profile=r.columns["cd_profile"][ok],
+                     cd_profile_bound=r.columns["cd_profile_sens"][ok],
+                     cd_wave=r.columns["cd_wave"][ok], k_sweep=k_sweep[0],
+                     k_sweep_bound=k_sweep[1], trim_cl=r.trim["cl"], trim_cd=r.trim["cd"],
+                     trim_cd_bound=r.trim["cd_sens"])
 
 
 def _write_csv(path: Path, header: tuple[str, ...], rows: list[tuple[float, ...]]) -> None:
@@ -219,11 +241,13 @@ def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
         "CD_wave (swept Korn + ADSEE drag rise). Isolated wing, no other components.",
         "",
         f"- Strips: cl_n = cl / cos²Λ_c/4 (Λ = {planform.sweep_quarter_chord_deg} deg), "
-        "cd = cd_n·k_Λ·C_f(Re_strip)/C_f(Re_polar), Re_strip = Re_polar·c/c_ref, lecture "
-        "flat-plate C_f (laminar 1.328/√Re, turbulent 0.455/((log₁₀Re)^2.58(1+0.144M²)^0.65), "
-        f"Re capped at the {case.drag.cutoff_regime} cutoff, k = {case.drag.roughness_m:g} m, "
-        f"x_lam = {case.drag.laminar_fraction:g}); baseline k_Λ: "
-        f"'{case.drag.sweep_drag_mode}', sensitivity: '{sens}'.",
+        "cd = cd_n·k_Λ·k_Re, k_Re = C_f(strip in flight)/C_f(polar), lecture flat-plate C_f "
+        "(laminar 1.328/√Re, turbulent 0.455/((log₁₀Re)^2.58(1+0.144M²)^0.65)). Strip: "
+        f"M = {cruise.mach}, Re capped at the {case.drag.cutoff_regime} cutoff, "
+        f"k = {case.drag.roughness_m:g} m, x_lam = {case.drag.laminar_fraction:g}; 'friction' "
+        "along the streamline (l = c, Re = Re_n/cos²Λ, M∞), 'cos3' normal to the sweep line "
+        "(l = c·cos Λ, Re_n, M∞·cos Λ), Re_n = Re_polar·c/c_ref. Polar: smooth wall at its own "
+        f"Re and M. Baseline k_Λ: '{case.drag.sweep_drag_mode}', sensitivity: '{sens}'.",
         f"- Korn: sweep of the {case.drag.korn_sweep_chord_fraction:g}c line = "
         f"{planform.sweep_deg(case.drag.korn_sweep_chord_fraction):.2f} deg, wing CL.",
         f"- Cruise section condition: M_n = {cruise.mach_normal:.4f}, Re_n(MAC) = "

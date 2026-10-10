@@ -43,10 +43,14 @@ alpha_npts = 15                 # 1 deg step, so 0 deg (the trim point) is a com
 [drag]
 # CD = CDi (VSPAERO, far-field) + CD_profile (XFoil polar, strip by strip) + CD_wave (Korn + ADSEE)
 korn_sweep_chord_fraction = 0.5          # half-chord sweep in the swept Korn equation
-# strip cd is scaled from the polar's Re to the strip's like the lecture's flat-plate skin
+# strip cd is scaled from the polar to the strip in flight like the lecture's flat-plate skin
 # friction (ADSEE-2, "Flat plate skin friction coefficient"; wing/skin_friction.py):
 #   Cf_lam = 1.328 / sqrt(Re),  Cf_turb = 0.455 / ((log10 Re)^2.58 (1 + 0.144 M^2)^0.65),
 #   Re = min(rho V l / mu, cutoff Re),  Cf = x_lam Cf_lam + (1 - x_lam) Cf_turb
+#   k_Re = Cf(strip: cruise M, roughness below) / Cf(polar: smooth wall, polar's Re and M)
+# the strip frame follows the sweep mode (wing/profile_drag.py, reynolds_factor):
+#   friction: along the streamline, l = c, Re = Re_n / cos^2, M = M_inf
+#   cos3:     normal to the sweep line, l = c cos, Re = Re_n, M = M_inf cos
 sweep_drag_mode = "friction"             # cd = cd_n: skin friction is not reduced by sweep (baseline)
 sensitivity_sweep_drag_mode = "cos3"     # cd = cd_n cos^3: pure simple sweep theory (optimistic)
 roughness_m = 0.634e-5                   # lecture table: smooth paint

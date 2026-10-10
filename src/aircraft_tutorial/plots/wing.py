@@ -60,6 +60,8 @@ _STYLE: Final[dict[RcKeyType, float | str | bool]] = {
 _LINESTYLES: Final[tuple[str, ...]] = ("-", "--", ":", "-.")
 _MARKERS: Final[tuple[str, ...]] = ("o", "s", "^", "D")
 _TRIM_MARKER_SIZE: Final[float] = 15.0
+_BOUND_TRIM_SIZE: Final[float] = 7.0
+"""Open circle of the trim point on the bounding-k_Λ drag polar."""
 _ALPHA_LABEL: Final[str] = r"Body angle of attack $\alpha$ [deg]"
 _CL_LABEL: Final[str] = r"Lift coefficient $C_L$ [-]"
 _CD_LABEL: Final[str] = r"Drag coefficient $C_D$ [-]"
@@ -86,30 +88,43 @@ class LiftCurve:
 
 @dataclass(frozen=True)
 class DragPolar:
-    """One drag polar to draw, with its build-up.
+    """One drag polar to draw, with its build-up and the two bounds of the sweep factor k_Λ.
 
     Attributes:
         label: Legend label.
         cl: Lift coefficient [-].
         cdi: Induced drag coefficient [-].
-        cd_profile: Profile drag coefficient [-].
+        cd_profile: Profile drag coefficient with the baseline sweep factor [-].
+        cd_profile_bound: Profile drag coefficient with the bounding sweep factor [-].
         cd_wave: Wave drag coefficient [-].
+        k_sweep: Baseline sweep factor k_Λ of the profile drag [-].
+        k_sweep_bound: Bounding sweep factor k_Λ of the profile drag [-].
         trim_cl: Lift coefficient of the trim point [-].
-        trim_cd: Total drag coefficient of the trim point [-].
+        trim_cd: Total drag coefficient of the trim point, baseline k_Λ [-].
+        trim_cd_bound: Total drag coefficient of the trim point, bounding k_Λ [-].
     """
 
     label: str
     cl: NDArray[np.float64]
     cdi: NDArray[np.float64]
     cd_profile: NDArray[np.float64]
+    cd_profile_bound: NDArray[np.float64]
     cd_wave: NDArray[np.float64]
+    k_sweep: float
+    k_sweep_bound: float
     trim_cl: float
     trim_cd: float
+    trim_cd_bound: float
 
     @property
     def cd(self) -> NDArray[np.float64]:
-        """Total drag coefficient [-]."""
+        """Total drag coefficient, baseline k_Λ [-]."""
         return self.cdi + self.cd_profile + self.cd_wave
+
+    @property
+    def cd_bound(self) -> NDArray[np.float64]:
+        """Total drag coefficient, bounding k_Λ [-]."""
+        return self.cdi + self.cd_profile_bound + self.cd_wave
 
 
 def sci_tex(value: float, digits: int = 3) -> str:
@@ -199,6 +214,9 @@ def plot_drag_build_up(polar: DragPolar, cl_design: float, title: str,
     """Draw C_L against the cumulative drag terms C_Di, + C_D,p, + C_D,w, with the trim point
     on the total.
 
+    The terms with profile drag are drawn for both sweep factors k_Λ: a solid line for the
+    baseline, a dashed line for the bound and a shaded band between them.
+
     Args:
         polar: Drag polar.
         cl_design: Design lift coefficient [-].
@@ -206,16 +224,29 @@ def plot_drag_build_up(polar: DragPolar, cl_design: float, title: str,
         conditions: Lines of the condition box.
         path: Output PNG path.
     """
+    k, k_bound = _k_sweep_text(polar.k_sweep), _k_sweep_text(polar.k_sweep_bound)
     with plt.rc_context(_STYLE):
         fig, ax = _new_figure()
         ax.plot(polar.cdi, polar.cl, linestyle=":", marker="^", markersize=4,
                 markerfacecolor="none", label=r"$C_{D_i}$ (VSPAERO, far-field)")
-        ax.plot(polar.cdi + polar.cd_profile, polar.cl, linestyle="--", marker="s",
-                markersize=4, markerfacecolor="none",
-                label=r"$C_{D_i} + C_{D,p}$ (profile drag, XFoil strips)")
+        profile = r"$C_{D_i} + C_{D,p}$ (XFoil strips)"
+        (line,) = ax.plot(polar.cdi + polar.cd_profile, polar.cl, marker="s", markersize=4,
+                          markerfacecolor="none", label=f"{profile}, {k}")
+        _bound_band(ax, polar.cdi + polar.cd_profile, polar.cdi + polar.cd_profile_bound,
+                    polar.cl, line.get_color(), f"{profile}, {k_bound}")
+        total = r"$C_D = C_{D_i} + C_{D,p} + C_{D,w}$ (Korn)"
         (line,) = ax.plot(polar.cd, polar.cl, marker="o", markersize=4,
-                          label=r"$C_D = C_{D_i} + C_{D,p} + C_{D,w}$ (wave drag, Korn)")
+                          label=f"{total}, {k}")
+        _bound_band(ax, polar.cd, polar.cd_bound, polar.cl, line.get_color(),
+                    f"{total}, {k_bound}")
         _drag_trim(ax, polar, line.get_color())
+        _annotate(ax, polar.trim_cd, polar.trim_cl,
+                  f"{polar.label} trim, $C_L$ = {polar.trim_cl:.3f}:\n"
+                  f"{k}: $C_D$ = {polar.trim_cd:.4f}, L/D = {polar.trim_cl / polar.trim_cd:.1f}\n"
+                  f"{k_bound}: $C_D$ = {polar.trim_cd_bound:.4f}, "
+                  f"L/D = {polar.trim_cl / polar.trim_cd_bound:.1f}",
+                  offset=(16.0, -52.0))
+        _bound_trim_legend(ax, polar.k_sweep_bound)
         _drag_axes(ax, conditions)
         _finish(fig, ax, title, cl_design, path)
 
@@ -224,21 +255,38 @@ def plot_drag_polars(polars: list[DragPolar], cl_design: float, title: str,
                      conditions: list[str], path: Path) -> None:
     """Draw the total drag polars of several wings, each with its trim point.
 
+    Each wing has a solid line for the baseline sweep factor k_Λ, a dashed line for the bound
+    and a shaded band between them. The trim annotations are short; the polar with the lowest
+    trim drag is annotated to the upper left, the others to the lower right, so the boxes do
+    not overlap.
+
     Args:
-        polars: Drag polars.
+        polars: Drag polars, all with the same pair of sweep factors.
         cl_design: Design lift coefficient [-].
         title: Figure title.
         conditions: Lines of the condition box.
         path: Output PNG path.
     """
+    lowest = min(range(len(polars)), key=lambda i: polars[i].trim_cd)
     with plt.rc_context(_STYLE):
         fig, ax = _new_figure()
         for i, polar in enumerate(polars):
-            (line,) = ax.plot(polar.cd, polar.cl, linestyle=_LINESTYLES[i % len(_LINESTYLES)],
-                              marker=_MARKERS[i % len(_MARKERS)], markersize=4.5,
-                              label=polar.label)
+            (line,) = ax.plot(polar.cd, polar.cl, marker=_MARKERS[i % len(_MARKERS)],
+                              markersize=4.5,
+                              label=f"{polar.label}, {_k_sweep_text(polar.k_sweep)}")
+            _bound_band(ax, polar.cd, polar.cd_bound, polar.cl, line.get_color(),
+                        f"{polar.label}, {_k_sweep_text(polar.k_sweep_bound)}")
             _drag_trim(ax, polar, line.get_color())
-        _drag_axes(ax, conditions)
+            _annotate(ax, polar.trim_cd, polar.trim_cl,
+                      f"{polar.label} trim\n"
+                      f"$C_D$ = {polar.trim_cd:.4f} / {polar.trim_cd_bound:.4f}\n"
+                      f"L/D = {polar.trim_cl / polar.trim_cd:.1f} / "
+                      f"{polar.trim_cl / polar.trim_cd_bound:.1f}",
+                      offset=(-66.0, 48.0) if i == lowest else (16.0, -52.0))
+        _bound_trim_legend(ax, polars[0].k_sweep_bound)
+        trim_values = (f"Trim values: {_k_sweep_text(polars[0].k_sweep)} / "
+                       f"{_k_sweep_text(polars[0].k_sweep_bound)}")
+        _drag_axes(ax, [*conditions, trim_values])
         _finish(fig, ax, title, cl_design, path)
 
 
@@ -252,12 +300,29 @@ def _new_figure() -> tuple[Figure, Axes]:
 
 
 def _drag_trim(ax: Axes, polar: DragPolar, color: ColorType) -> None:
-    """Trim star on a drag polar, annotated with C_D, C_L and L/D."""
+    """Trim star on the baseline drag polar and an open circle on the bound."""
     _trim_star(ax, polar.trim_cd, polar.trim_cl, color)
-    _annotate(ax, polar.trim_cd, polar.trim_cl,
-              f"{polar.label} trim: $C_D$ = {polar.trim_cd:.4f},\n"
-              f"$C_L$ = {polar.trim_cl:.3f}, L/D = {polar.trim_cl / polar.trim_cd:.1f}",
-              offset=(16.0, -40.0))
+    ax.plot(polar.trim_cd_bound, polar.trim_cl, marker="o", markersize=_BOUND_TRIM_SIZE,
+            color=color, markerfacecolor="white", linestyle="none", zorder=5)
+
+
+def _bound_trim_legend(ax: Axes, k_sweep_bound: float) -> None:
+    """Legend entry of the open trim circle on the bound (an empty line, nothing drawn)."""
+    ax.plot([], [], marker="o", markersize=_BOUND_TRIM_SIZE, markerfacecolor="white",
+            markeredgecolor="black", linestyle="none",
+            label=f"Trim point, {_k_sweep_text(k_sweep_bound)}")
+
+
+def _bound_band(ax: Axes, cd: NDArray[np.float64], cd_bound: NDArray[np.float64],
+                cl: NDArray[np.float64], color: ColorType, label: str) -> None:
+    """Dashed line of the bounding k_Λ and a shaded band to the baseline, in one colour."""
+    ax.plot(cd_bound, cl, linestyle="--", linewidth=1.0, color=color, label=label)
+    ax.fill_betweenx(cl, cd_bound, cd, color=color, alpha=0.15, linewidth=0.0)
+
+
+def _k_sweep_text(k_sweep: float) -> str:
+    """Legend text of a sweep factor, for example "$k_\\Lambda$ = 0.499"."""
+    return rf"$k_\Lambda$ = {k_sweep:.3g}"
 
 
 def _trim_star(ax: Axes, x: float, y: float, color: ColorType) -> None:

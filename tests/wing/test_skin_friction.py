@@ -65,6 +65,15 @@ def test_rough_surface_caps_reynolds_at_cutoff() -> None:
                                                         rel=1e-12)
 
 
+def test_smooth_cf_ignores_the_cutoff() -> None:
+    """The same rough surface: cf caps Re at the cutoff, smooth_cf uses the actual Re."""
+    model = _model(roughness_m=1e-3)
+
+    assert float(model.smooth_cf(6.6e7)) == pytest.approx(float(turbulent_cf(6.6e7, 0.855)),
+                                                          rel=1e-12)
+    assert float(model.smooth_cf(6.6e7)) < float(model.cf(6.6e7, 1.0))
+
+
 def test_cf_weights_laminar_and_turbulent() -> None:
     """10 % laminar: C_f = 0.1·C_f,lam + 0.9·C_f,turb (lecture example)."""
     model = _model(laminar=0.1)
