@@ -46,7 +46,13 @@ alpha_start_deg = -4.0
 alpha_end_deg = 10.0
 alpha_npts = 15
 
+[mesh_study]
+segment_tess = [2, 3, 5]
+chord_tess = [21, 33, 49]
+
 [drag]
+induced_drag = "loading"
+loading_fourier_terms = 8
 korn_sweep_chord_fraction = 0.5
 sweep_drag_mode = "friction"
 sensitivity_sweep_drag_mode = "cos3"
@@ -101,6 +107,8 @@ def test_load_wing_case_valid_file_returns_every_value(tmp_path: Path) -> None:
     assert case.wings[1].metrics == (tmp_path / "results" / "b_metrics.csv").resolve()
     assert (case.drag.roughness_m, case.drag.cutoff_regime, case.drag.laminar_fraction) == (
         0.634e-5, "transonic", 0.0)
+    assert (case.mesh_study.segment_tess, case.mesh_study.chord_tess) == ((2, 3, 5), (21, 33, 49))
+    assert (case.drag.induced_drag, case.drag.loading_fourier_terms) == ("loading", 8)
 
 
 @pytest.mark.parametrize(
@@ -127,12 +135,20 @@ def test_load_wing_case_valid_file_returns_every_value(tmp_path: Path) -> None:
         ("eta = 0.95", "eta = 0.0", "analytic.eta"),
         ('cutoff_regime = "transonic"', 'cutoff_regime = "hypersonic"', "drag.cutoff_regime"),
         ("laminar_fraction = 0.0", "laminar_fraction = 1.5", "drag.laminar_fraction"),
+        ("chord_tess = [21, 33, 49]", "chord_tess = [21, 33]", "same length"),
+        ("segment_tess = [2, 3, 5]", "segment_tess = [2, 3.5, 5]", "mesh_study.segment_tess"),
+        ("chord_tess = [21, 33, 49]", "chord_tess = [2, 33, 49]", "mesh_study.chord_tess"),
+        ("loading_fourier_terms = 8", "loading_fourier_terms = 13",
+         "drag.loading_fourier_terms"),
+        ('induced_drag = "loading"', 'induced_drag = "near_field"', "drag.induced_drag"),
     ],
     ids=[
         "missing_key", "zero_span", "sweep_90", "supersonic", "above_isa_range", "zero_max_twist",
         "float_iter", "bool_as_int", "alpha_range_without_zero", "zero_off_grid",
         "space_in_name", "duplicate_name", "missing_airfoil", "kappa_out_of_range",
         "missing_polar_key", "unknown_mode", "korn_fraction_above_one", "zero_eta", "unknown_regime", "laminar_above_one",
+        "mesh_lengths_differ", "mesh_float_level", "mesh_chord_below_three",
+        "fourier_terms_above_coarsest_strips", "unknown_induced_drag_source",
     ],
 )
 def test_load_wing_case_invalid_value_raises_naming_key(

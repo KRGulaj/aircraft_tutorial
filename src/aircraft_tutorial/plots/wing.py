@@ -62,6 +62,10 @@ _MARKERS: Final[tuple[str, ...]] = ("o", "s", "^", "D")
 _TRIM_MARKER_SIZE: Final[float] = 15.0
 _BOUND_TRIM_SIZE: Final[float] = 7.0
 """Open circle of the trim point on the bounding-k_Λ drag polar."""
+_LIMIT_MARKER_SIZE: Final[float] = 9.0
+"""Cross at the end of the valid drag polar on a lift curve."""
+_ETA_LABEL: Final[str] = r"Span station $\eta = 2y/b$ [-]"
+_CL_N_LABEL: Final[str] = r"Sweep-normal section lift coefficient $c_{l,n}$ [-]"
 _ALPHA_LABEL: Final[str] = r"Body angle of attack $\alpha$ [deg]"
 _CL_LABEL: Final[str] = r"Lift coefficient $C_L$ [-]"
 _CD_LABEL: Final[str] = r"Drag coefficient $C_D$ [-]"
@@ -77,6 +81,10 @@ class LiftCurve:
         cl: Lift coefficient [-].
         trim_alpha_deg: Body angle of the trim point [deg].
         trim_cl: Lift coefficient of the trim point [-].
+        has_trim: Draw the trim point; False for a reference curve, for example the
+            untwisted wing.
+        limit: (α [deg], C_L [-]) of the end of the valid drag polar, marked with a cross;
+            None for no mark.
     """
 
     label: str
@@ -84,6 +92,32 @@ class LiftCurve:
     cl: NDArray[np.float64]
     trim_alpha_deg: float
     trim_cl: float
+    has_trim: bool = True
+    limit: tuple[float, float] | None = None
+
+
+@dataclass(frozen=True)
+class SpanLoading:
+    """Sweep-normal section lift along the span of one wing, against the top of its polar.
+
+    Attributes:
+        label: Legend label of the wing.
+        eta: Strip stations 2y/b [-].
+        cl_n_trim: c_l,n of the strips at the trim point [-].
+        trim_alpha_deg: Body angle of the trim point [deg].
+        cl_n_outside: c_l,n of the strips at the first angle with a strip outside the usable
+            polar; None if no swept angle leaves it [-].
+        outside_alpha_deg: That angle [deg]; NaN if None.
+        cl_n_max: Top of the usable section polar [-].
+    """
+
+    label: str
+    eta: NDArray[np.float64]
+    cl_n_trim: NDArray[np.float64]
+    trim_alpha_deg: float
+    cl_n_outside: NDArray[np.float64] | None
+    outside_alpha_deg: float
+    cl_n_max: float
 
 
 @dataclass(frozen=True)
@@ -94,6 +128,7 @@ class DragPolar:
         label: Legend label.
         cl: Lift coefficient [-].
         cdi: Induced drag coefficient [-].
+        cdi_source: How CDi was found, for the legend (for example "span loading, Munk").
         cd_profile: Profile drag coefficient with the baseline sweep factor [-].
         cd_profile_bound: Profile drag coefficient with the bounding sweep factor [-].
         cd_wave: Wave drag coefficient [-].
@@ -107,6 +142,7 @@ class DragPolar:
     label: str
     cl: NDArray[np.float64]
     cdi: NDArray[np.float64]
+    cdi_source: str
     cd_profile: NDArray[np.float64]
     cd_profile_bound: NDArray[np.float64]
     cd_wave: NDArray[np.float64]
@@ -178,7 +214,8 @@ def plot_lift_curves(curves: list[LiftCurve], cl_design: float, title: str,
                      conditions: list[str], path: Path) -> None:
     """Draw C_L against body angle of attack with the trim points.
 
-    Coinciding trim points are annotated once.
+    Coinciding trim points are annotated once. A curve with a `limit` gets a cross at the end
+    of its valid drag polar.
 
     Args:
         curves: Lift curves to draw.
@@ -196,10 +233,20 @@ def plot_lift_curves(curves: list[LiftCurve], cl_design: float, title: str,
                               linestyle=_LINESTYLES[i % len(_LINESTYLES)],
                               marker=_MARKERS[i % len(_MARKERS)], markersize=4.5,
                               markerfacecolor="none", label=curve.label)
-            _trim_star(ax, curve.trim_alpha_deg, curve.trim_cl, line.get_color())
-        for alpha, cl in _unique_points([(c.trim_alpha_deg, c.trim_cl) for c in curves]):
+            if curve.has_trim:
+                _trim_star(ax, curve.trim_alpha_deg, curve.trim_cl, line.get_color())
+            if curve.limit is not None:
+                ax.plot(*curve.limit, marker="X", markersize=_LIMIT_MARKER_SIZE,
+                        color=line.get_color(), markeredgecolor="black", linestyle="none",
+                        zorder=5)
+        trims = [(c.trim_alpha_deg, c.trim_cl) for c in curves if c.has_trim]
+        for alpha, cl in _unique_points(trims):
             _annotate(ax, alpha, cl, rf"Trim: $\alpha$ = {alpha:.2f}°, $C_L$ = {cl:.3f}",
                       offset=(18.0, -34.0))
+        if any(c.limit is not None for c in curves):
+            ax.plot([], [], marker="X", markersize=_LIMIT_MARKER_SIZE, markerfacecolor="white",
+                    markeredgecolor="black", linestyle="none",
+                    label="End of the valid drag polar")
         ax.axhline(0.0, color="black", linewidth=0.7)
         ax.axvline(0.0, color="black", linewidth=0.7)
         ax.set_xlabel(_ALPHA_LABEL)
@@ -228,7 +275,7 @@ def plot_drag_build_up(polar: DragPolar, cl_design: float, title: str,
     with plt.rc_context(_STYLE):
         fig, ax = _new_figure()
         ax.plot(polar.cdi, polar.cl, linestyle=":", marker="^", markersize=4,
-                markerfacecolor="none", label=r"$C_{D_i}$ (VSPAERO, far-field)")
+                markerfacecolor="none", label=rf"$C_{{D_i}}$ ({polar.cdi_source})")
         profile = r"$C_{D_i} + C_{D,p}$ (XFoil strips)"
         (line,) = ax.plot(polar.cdi + polar.cd_profile, polar.cl, marker="s", markersize=4,
                           markerfacecolor="none", label=f"{profile}, {k}")
@@ -288,6 +335,44 @@ def plot_drag_polars(polars: list[DragPolar], cl_design: float, title: str,
                        f"{_k_sweep_text(polars[0].k_sweep_bound)}")
         _drag_axes(ax, [*conditions, trim_values])
         _finish(fig, ax, title, cl_design, path)
+
+
+def plot_span_loading(loadings: list[SpanLoading], title: str, conditions: list[str],
+                      path: Path) -> None:
+    """Draw c_l,n along the span at the trim point and at the first angle with a strip outside
+    the usable polar, with the top of each wing's polar as a horizontal line.
+
+    Args:
+        loadings: Span loadings, one per wing.
+        title: Figure title.
+        conditions: Lines of the condition box.
+        path: Output PNG path.
+    """
+    with plt.rc_context(_STYLE):
+        fig, ax = _new_figure()
+        for i, load in enumerate(loadings):
+            marker = _MARKERS[i % len(_MARKERS)]
+            (line,) = ax.plot(load.eta, load.cl_n_trim, marker=marker, markersize=4,
+                              label=rf"{load.label}, trim $\alpha$ = {load.trim_alpha_deg:.1f}°")
+            color = line.get_color()
+            if load.cl_n_outside is not None:
+                ax.plot(load.eta, load.cl_n_outside, linestyle="--", marker=marker,
+                        markersize=4, markerfacecolor="none", color=color,
+                        label=rf"{load.label}, $\alpha$ = {load.outside_alpha_deg:.1f}° "
+                              "(first beyond polar)")
+            ax.axhline(load.cl_n_max, color=color, linestyle=":", linewidth=1.2,
+                       label=rf"{load.label}: XFoil $c_{{l,max}}$ = {load.cl_n_max:.2f}")
+        ax.set_xlim(0.0, 1.0)
+        ax.set_ylim(bottom=0.0)
+        ax.set_xlabel(_ETA_LABEL)
+        ax.set_ylabel(_CL_N_LABEL)
+        ax.add_artist(AnchoredText("\n".join(conditions), loc="lower left", frameon=True,
+                                   prop={"size": 8.5}))
+        ax.set_title(title)
+        handles, labels = ax.get_legend_handles_labels()
+        fig.legend(handles, labels, loc="outside lower center", ncols=2, frameon=False)
+        fig.savefig(path, dpi=PNG_DPI)
+        plt.close(fig)
 
 
 def _new_figure() -> tuple[Figure, Axes]:

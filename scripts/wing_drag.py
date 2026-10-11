@@ -3,7 +3,12 @@
 # Created: 2026-10-04
 """Task 1c: drag polars of the sized WING-1 and WING-2, with the trim point.
 
-    CD = CDi (VSPAERO, far-field) + CD_profile (XFoil polar, strip by strip) + CD_wave (Korn)
+    CD = CDi + CD_profile (XFoil polar, strip by strip) + CD_wave (Korn)
+
+CDi comes from the span loading by default (`induced_drag = "loading"`): CDi = CL² / (π·A·e)
+with e from a sine-series fit of the strip loading c·cl at each angle (Munk: a planar wake's CDi
+depends only on the span loading; wing/span_efficiency.py). The VSPAERO far-field CDiw does not
+converge with the spanwise mesh, the span loading does. drag_polar.csv carries both values.
 
 Reads, for each wing of inputs/wing.toml:
 
@@ -19,7 +24,8 @@ streamwise chord whose sweep-normal Reynolds number equals the polar's,
 c_ref = Re_polar / (Re_n per metre); it is the MAC when the polar was run at Re_n of the MAC.
 
 Writes drag_polar.csv, strip_drag.csv and drag_polar.png to results/wing/<name>/, and
-drag_polars.png and drag_summary.md to results/wing/.
+drag_polars.png, span_loading.png (c_l,n along the span at the trim point and at the first angle
+with a strip beyond the polar) and drag_summary.md to results/wing/.
 
 Needs no OpenVSP. Run from the repo root, after scripts.wing_twist: python -m scripts.wing_drag
 """
@@ -40,9 +46,11 @@ from aircraft_tutorial.contracts.section_polar import SectionPolarData, read_sec
 from aircraft_tutorial.geometry.airfoil import max_thickness, normalized, read_dat
 from aircraft_tutorial.plots.wing import (
     DragPolar,
+    SpanLoading,
     flight_conditions,
     plot_drag_build_up,
     plot_drag_polars,
+    plot_span_loading,
     section_conditions,
     section_label,
 )
@@ -50,7 +58,8 @@ from aircraft_tutorial.wing import profile_drag as pd
 from aircraft_tutorial.wing.cruise import CruisePoint, cruise_point
 from aircraft_tutorial.wing.planform import TrapezoidalPlanform
 from aircraft_tutorial.wing.skin_friction import FrictionModel
-from aircraft_tutorial.wing.vlm_results import read_polar_csv, read_strips_csv
+from aircraft_tutorial.wing.span_efficiency import loading_span_efficiency
+from aircraft_tutorial.wing.vlm_results import StripLoads, read_polar_csv, read_strips_csv
 from aircraft_tutorial.wing.wave_drag import korn_mdd, wave_drag
 
 ROOT: Final[Path] = Path(__file__).resolve().parents[1]
@@ -61,8 +70,10 @@ MACH_TOLERANCE: Final[float] = 0.005
 its cp_min compared with Cp*."""
 
 _POLAR_COLUMNS: Final[tuple[str, ...]] = (
-    "alpha_deg", "cl", "cdi", "cd_profile", "cd_profile_sens", "m_dd", "cd_wave", "cd",
-    "cd_sens", "l_d", "n_stalled", "n_below_polar")
+    "alpha_deg", "cl", "cdi", "cdi_far_field", "e_loading", "cd_profile", "cd_profile_sens",
+    "m_dd", "cd_wave", "cd", "cd_sens", "l_d", "n_stalled", "n_below_polar")
+_INDUCED_LABELS: Final[dict[str, str]] = {"loading": "span loading, Munk",
+                                          "far_field": "VSPAERO far-field"}
 _STRIP_COLUMNS: Final[tuple[str, ...]] = (
     "alpha_deg", "y_m", "chord_m", "cl", "cl_n", "cd_n", "cd", "status")
 
@@ -79,6 +90,8 @@ class WingDrag:
         thickness_ratio: Section t/c [-].
         columns: drag_polar.csv columns, one entry per angle of attack.
         trim: Values at CL = CL_des, interpolated on the angles with a defined CD.
+        loading: Span loading at the trim point and at the first angle beyond the polar.
+        induced_drag: Source of the CDi column, "loading" or "far_field".
     """
 
     entry: WingEntry
@@ -88,6 +101,8 @@ class WingDrag:
     thickness_ratio: float
     columns: dict[str, NDArray[np.float64]]
     trim: dict[str, float]
+    loading: SpanLoading
+    induced_drag: str
 
 
 def main() -> None:
@@ -108,6 +123,11 @@ def main() -> None:
                      "Drag polars of the sized isolated wings",
                      [flight_conditions(cruise.mach, cruise.reynolds_mac, cruise.altitude_m),
                       *sections], OUT_DIR / "drag_polars.png")
+    plot_span_loading([r.loading for r in results],
+                      "Span loading of the sized wings against the top of the section polar",
+                      [flight_conditions(cruise.mach, cruise.reynolds_mac, cruise.altitude_m),
+                       *sections, rf"$c_{{l,n}} = c_l / \cos^2\Lambda_{{c/4}}$, VSPAERO strips"],
+                      OUT_DIR / "span_loading.png")
     (OUT_DIR / "drag_summary.md").write_text(_summary(case, planform, cruise, results),
                                              encoding="utf-8")
     print(f"Results in {OUT_DIR}")
@@ -141,8 +161,12 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
 
     rows: dict[str, list[float]] = {c: [] for c in _POLAR_COLUMNS}
     strip_rows: list[tuple[float, ...]] = []
-    for alpha, cl, cdi in zip(vlm.alpha_deg, vlm.cl, vlm.cdi, strict=True):
+    for alpha, cl, cdi_far_field in zip(vlm.alpha_deg, vlm.cl, vlm.cdi, strict=True):
         s = strips.at_alpha(float(alpha))
+        e_loading = loading_span_efficiency(s.y_m / planform.semi_span_m, s.cl * s.chord_m,
+                                            case.drag.loading_fourier_terms)
+        cdi = (float(cl) ** 2 / (math.pi * planform.aspect_ratio * e_loading)
+               if case.drag.induced_drag == "loading" else float(cdi_far_field))
         out, cd_prof = pd.strip_profile_drag(
             s, lookup, sweep_deg=sweep, chord_ref_m=chord_ref, reynolds_ref=section.reynolds,
             polar_mach=section.mach, area_m2=planform.area_m2,
@@ -153,11 +177,12 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
             mode=case.drag.sensitivity_sweep_drag_mode, flight=flight)
         m_dd = korn_mdd(entry.kappa_a, thickness, float(cl), sweep_korn)
         cd_wave = wave_drag(cruise.mach, m_dd)
-        cd = float(cdi) + cd_prof + cd_wave
+        cd = cdi + cd_prof + cd_wave
         for key, value in (("alpha_deg", alpha), ("cl", cl), ("cdi", cdi),
+                           ("cdi_far_field", cdi_far_field), ("e_loading", e_loading),
                            ("cd_profile", cd_prof), ("cd_profile_sens", cd_prof_sens),
                            ("m_dd", m_dd), ("cd_wave", cd_wave), ("cd", cd),
-                           ("cd_sens", float(cdi) + cd_prof_sens + cd_wave),
+                           ("cd_sens", cdi + cd_prof_sens + cd_wave),
                            ("l_d", float(cl) / cd),
                            ("n_stalled", int(np.sum(out.status == pd.STALLED))),
                            ("n_below_polar", int(np.sum(out.status == pd.BELOW_POLAR)))):
@@ -170,17 +195,36 @@ def _analyse(case: WingCase, entry: WingEntry, planform: TrapezoidalPlanform,
                list(zip(*(columns[c] for c in _POLAR_COLUMNS), strict=True)))
     _write_csv(out_dir / "strip_drag.csv", _STRIP_COLUMNS, strip_rows)
 
-    result = WingDrag(entry, section, lookup, chord_ref, thickness, columns,
-                      _trim(columns, cruise.cl_design))
+    trim = _trim(columns, cruise.cl_design)
+    result = WingDrag(entry, section, lookup, chord_ref, thickness, columns, trim,
+                      _span_loading(entry, strips, lookup, planform, trim["alpha_deg"]),
+                      case.drag.induced_drag)
     plot_drag_build_up(_plot_data(result, _sweep_factors(case, planform)), cruise.cl_design,
                        f"{entry.name} ({section_label(entry.airfoil.stem)}): drag polar of the "
                        "isolated wing",
                        [flight_conditions(cruise.mach, cruise.reynolds_mac, cruise.altitude_m),
                         section_conditions(section.reynolds, section.mach),
                         rf"Korn: $\kappa_A$ = {entry.kappa_a}, $M_{{DD}}$ at trim = "
-                        f"{result.trim['m_dd']:.3f}"],
+                        f"{trim['m_dd']:.3f}, $M - M_{{DD}}$ = {cruise.mach - trim['m_dd']:.3f}"],
                        out_dir / "drag_polar.png")
     return result
+
+
+def _span_loading(entry: WingEntry, strips: StripLoads, lookup: pd.DragLookup,
+                  planform: TrapezoidalPlanform, trim_alpha_deg: float) -> SpanLoading:
+    """c_l,n along the span at the swept angle nearest the trim point and at the first angle
+    with a strip outside the usable polar."""
+    sweep = planform.sweep_quarter_chord_deg
+    alphas = np.unique(strips.alpha_deg)
+    at_trim = strips.at_alpha(float(alphas[np.argmin(np.abs(alphas - trim_alpha_deg))]))
+    limit = pd.polar_limit(strips, lookup, sweep)
+    outside = (None if math.isnan(limit.first_outside_alpha_deg)
+               else pd.normal_cl(strips.at_alpha(limit.first_outside_alpha_deg).cl, sweep))
+    return SpanLoading(label=entry.name, eta=at_trim.y_m / planform.semi_span_m,
+                       cl_n_trim=pd.normal_cl(at_trim.cl, sweep),
+                       trim_alpha_deg=float(at_trim.alpha_deg[0]), cl_n_outside=outside,
+                       outside_alpha_deg=limit.first_outside_alpha_deg,
+                       cl_n_max=float(lookup.cl[-1]))
 
 
 def _trim(columns: dict[str, NDArray[np.float64]], cl_design: float) -> dict[str, float]:
@@ -211,6 +255,7 @@ def _plot_data(r: WingDrag, k_sweep: tuple[float, float]) -> DragPolar:
     """
     ok = np.isfinite(r.columns["cd"])
     return DragPolar(label=r.entry.name, cl=r.columns["cl"][ok], cdi=r.columns["cdi"][ok],
+                     cdi_source=_INDUCED_LABELS[r.induced_drag],
                      cd_profile=r.columns["cd_profile"][ok],
                      cd_profile_bound=r.columns["cd_profile_sens"][ok],
                      cd_wave=r.columns["cd_wave"][ok], k_sweep=k_sweep[0],
@@ -237,9 +282,14 @@ def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
         "Generated by `python -m scripts.wing_drag` from `inputs/wing.toml` and the results of "
         "`scripts.wing_twist`.",
         "",
-        "CD = CDi (VSPAERO, far-field) + CD_profile (XFoil polar, strip by strip) + "
-        "CD_wave (swept Korn + ADSEE drag rise). Isolated wing, no other components.",
+        f"CD = CDi ({_INDUCED_LABELS[case.drag.induced_drag]}) + CD_profile (XFoil polar, "
+        "strip by strip) + CD_wave (swept Korn + ADSEE drag rise). Isolated wing, no other "
+        "components.",
         "",
+        f"- Induced drag: '{case.drag.induced_drag}'. Loading: CDi = CL²/(π·A·e), "
+        "e = 1/(1 + Σ_{n≥3} n(A_n/A_1)²) from a fit of "
+        f"{case.drag.loading_fourier_terms} odd sine terms to the strip loading c·cl (Munk). "
+        "The VSPAERO far-field CDiw is listed for comparison.",
         f"- Strips: cl_n = cl / cos²Λ_c/4 (Λ = {planform.sweep_quarter_chord_deg} deg), "
         "cd = cd_n·k_Λ·k_Re, k_Re = C_f(strip in flight)/C_f(polar), lecture flat-plate C_f "
         "(laminar 1.328/√Re, turbulent 0.455/((log₁₀Re)^2.58(1+0.144M²)^0.65)). Strip: "
@@ -276,14 +326,15 @@ def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
         "",
         f"## Trim point (CL = CL_des = {cruise.cl_design:.4f})",
         "",
-        f"| Wing | α_trim [deg] | CDi | CD_profile | CD_wave | M_dd | CD | L/D "
-        f"| CD ({sens}) | L/D ({sens}) |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        f"| Wing | α_trim [deg] | CDi | e loading | CDi far-field | CD_profile | CD_wave | M_dd "
+        f"| CD | L/D | CD ({sens}) | L/D ({sens}) |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in results:
         t = r.trim
         lines.append(
-            f"| {r.entry.name} | {t['alpha_deg']:+.3f} | {t['cdi']:.5f} | {t['cd_profile']:.5f} "
+            f"| {r.entry.name} | {t['alpha_deg']:+.3f} | {t['cdi']:.5f} | {t['e_loading']:.4f} "
+            f"| {t['cdi_far_field']:.5f} | {t['cd_profile']:.5f} "
             f"| {t['cd_wave']:.5f} | {t['m_dd']:.4f} | {t['cd']:.5f} "
             f"| {cruise.cl_design / t['cd']:.2f} | {t['cd_sens']:.5f} "
             f"| {cruise.cl_design / t['cd_sens']:.2f} |")

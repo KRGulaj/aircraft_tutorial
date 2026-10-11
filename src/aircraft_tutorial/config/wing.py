@@ -4,8 +4,8 @@
 """Load the wing-analysis run definition (task 1c) from TOML into frozen dataclasses.
 
 The TOML file holds the aircraft data, the trapezoidal planform, the cruise condition, the
-twist-sizing settings, the VLM settings, the drag settings, the analytical-method settings and
-the wings to analyse. Every value is validated on
+twist-sizing settings, the VLM settings, the mesh levels of the grid-convergence check, the drag
+settings, the analytical-method settings and the wings to analyse. Every value is validated on
 load, and a bad value raises `CaseError` naming the key and the value. Relative file paths
 resolve against the directory of the TOML file.
 
@@ -41,7 +41,13 @@ Expected layout::
     alpha_end_deg = 10.0
     alpha_npts = 15
 
+    [mesh_study]
+    segment_tess = [2, 3, 5]
+    chord_tess = [21, 33, 49]
+
     [drag]
+    induced_drag = "loading"
+    loading_fourier_terms = 8
     korn_sweep_chord_fraction = 0.5
     sweep_drag_mode = "friction"
     sensitivity_sweep_drag_mode = "cos3"
@@ -78,6 +84,8 @@ from aircraft_tutorial.config.fields import integer, number, require, string, ta
 CUTOFF_REGIMES: Final[tuple[str, ...]] = ("subsonic", "transonic")
 """Cutoff-Reynolds formulas of the flat-plate skin friction (wing.skin_friction)."""
 
+INDUCED_DRAG_SOURCES: Final[tuple[str, ...]] = ("loading", "far_field")
+"""Sources of the induced drag in the drag polar (scripts/wing_drag.py)."""
 SWEEP_DRAG_MODES: Final[tuple[str, ...]] = ("friction", "cos3")
 """Ways to take a sweep-normal section cd to the streamwise one (wing.profile_drag)."""
 
@@ -174,10 +182,29 @@ class VlmSettings:
 
 
 @dataclass(frozen=True)
+class MeshStudySettings:
+    """Mesh levels of the grid-convergence check of the sized wing at the trim angle.
+
+    Level i uses segment_tess[i] and chord_tess[i]; the other VLM settings are those of [vlm].
+
+    Attributes:
+        segment_tess: Spanwise sections per segment of each level [-].
+        chord_tess: Chordwise points of each level [-].
+    """
+
+    segment_tess: tuple[int, ...]
+    chord_tess: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class DragSettings:
     """Drag build-up settings.
 
     Attributes:
+        induced_drag: Source of CDi in the drag polar, "loading" (CL² / (π·A·e) with e from the
+            strip loading, wing.span_efficiency) or "far_field" (VSPAERO CDiw).
+        loading_fourier_terms: Odd sine terms of the span-efficiency fit; at most the strip
+            count of the [vlm] mesh and of the coarsest [mesh_study] level [-].
         korn_sweep_chord_fraction: Chord line whose sweep enters the Korn equation [-].
         sweep_drag_mode: Baseline sweep drag mode, "friction" or "cos3".
         sensitivity_sweep_drag_mode: Mode reported as the sensitivity.
@@ -186,6 +213,8 @@ class DragSettings:
         laminar_fraction: Laminar part of the chord in the skin-friction average [-].
     """
 
+    induced_drag: str
+    loading_fourier_terms: int
     korn_sweep_chord_fraction: float
     sweep_drag_mode: str
     sensitivity_sweep_drag_mode: str
@@ -233,6 +262,7 @@ class WingCase:
     cruise: CruiseInput
     twist: TwistSettings
     vlm: VlmSettings
+    mesh_study: MeshStudySettings
     drag: DragSettings
     analytic: AnalyticSettings
     wings: tuple[WingEntry, ...]
@@ -255,13 +285,17 @@ def load_wing_case(path: Path) -> WingCase:
     except (OSError, tomllib.TOMLDecodeError) as exc:
         raise CaseError(f"{path}: cannot read run definition: {exc}") from exc
 
+    vlm = _vlm(table(raw, "vlm"))
+    mesh_study = _mesh_study(table(raw, "mesh_study"))
     return WingCase(
         aircraft=_aircraft(table(raw, "aircraft")),
         planform=_planform(table(raw, "planform")),
         cruise=_cruise(table(raw, "cruise")),
         twist=_twist(table(raw, "twist")),
-        vlm=_vlm(table(raw, "vlm")),
-        drag=_drag(table(raw, "drag")),
+        vlm=vlm,
+        mesh_study=mesh_study,
+        drag=_drag(table(raw, "drag"),
+                   vlm.segments * (min(vlm.segment_tess, *mesh_study.segment_tess) - 1)),
         analytic=_analytic(table(raw, "analytic")),
         wings=_wings(raw, path.resolve().parent),
     )
@@ -335,8 +369,41 @@ def _vlm(t: dict[str, object]) -> VlmSettings:
     return VlmSettings(segments, segment_tess, chord_tess, wake, cpus, start, end, npts)
 
 
-def _drag(t: dict[str, object]) -> DragSettings:
-    """Validate the [drag] table."""
+def _mesh_study(t: dict[str, object]) -> MeshStudySettings:
+    """Validate the [mesh_study] table: two equally long lists of at least two levels."""
+    segment_tess = _int_list(t, "mesh_study.segment_tess")
+    chord_tess = _int_list(t, "mesh_study.chord_tess")
+    require(len(segment_tess) == len(chord_tess), "mesh_study.segment_tess/chord_tess",
+            (segment_tess, chord_tess), "must have the same length")
+    require(len(segment_tess) >= 2, "mesh_study.segment_tess", segment_tess,
+            "needs at least two levels")
+    require(all(n >= 2 for n in segment_tess), "mesh_study.segment_tess", segment_tess,
+            "every level must be >= 2")
+    require(all(n >= 3 for n in chord_tess), "mesh_study.chord_tess", chord_tess,
+            "every level must be >= 3")
+    return MeshStudySettings(segment_tess=segment_tess, chord_tess=chord_tess)
+
+
+def _int_list(t: dict[str, object], dotted: str) -> tuple[int, ...]:
+    """Return a required list of integers."""
+    key = dotted.rsplit(".", 1)[-1]
+    value = t.get(key)
+    if not isinstance(value, list):
+        raise CaseError(f"{dotted}: must be a list of integers, got {value!r}")
+    items = cast(list[object], value)
+    if not all(isinstance(v, int) and not isinstance(v, bool) for v in items):
+        raise CaseError(f"{dotted}: must be a list of integers, got {value!r}")
+    return tuple(cast(list[int], items))
+
+
+def _drag(t: dict[str, object], fewest_strips: int) -> DragSettings:
+    """Validate the [drag] table. The Fourier term count must fit the coarsest strip mesh."""
+    induced = string(t, "drag.induced_drag")
+    terms = integer(t, "drag.loading_fourier_terms")
+    require(induced in INDUCED_DRAG_SOURCES, "drag.induced_drag", induced,
+            f"must be one of {INDUCED_DRAG_SOURCES}")
+    require(1 <= terms <= fewest_strips, "drag.loading_fourier_terms", terms,
+            f"must be in [1, {fewest_strips}] (strips of the coarsest [vlm] or [mesh_study] mesh)")
     fraction = number(t, "drag.korn_sweep_chord_fraction")
     mode = string(t, "drag.sweep_drag_mode")
     sensitivity = string(t, "drag.sensitivity_sweep_drag_mode")
@@ -352,7 +419,7 @@ def _drag(t: dict[str, object]) -> DragSettings:
     require(regime in CUTOFF_REGIMES, "drag.cutoff_regime", regime,
             f"must be one of {CUTOFF_REGIMES}")
     require(0.0 <= laminar <= 1.0, "drag.laminar_fraction", laminar, "must be in [0, 1]")
-    return DragSettings(fraction, mode, sensitivity, roughness, regime, laminar)
+    return DragSettings(induced, terms, fraction, mode, sensitivity, roughness, regime, laminar)
 
 
 def _analytic(t: dict[str, object]) -> AnalyticSettings:

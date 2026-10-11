@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -13,10 +14,12 @@ import pytest
 from aircraft_tutorial.plots.wing import (
     DragPolar,
     LiftCurve,
+    SpanLoading,
     flight_conditions,
     plot_drag_build_up,
     plot_drag_polars,
     plot_lift_curves,
+    plot_span_loading,
     sci_tex,
     section_conditions,
     section_label,
@@ -56,14 +59,23 @@ def test_section_label_spaces_naca_and_drops_gen(stem: str, expected: str) -> No
 def test_plots_write_one_png_each(tmp_path: Path) -> None:
     """Each figure is written as one PNG file and nothing else."""
     curve = LiftCurve("WING-1", ALPHA, CL, 0.0, 0.55)
-    polar = DragPolar("WING-1", CL, np.array([0.006, 0.012, 0.020]),
+    polar = DragPolar("WING-1", CL, np.array([0.006, 0.012, 0.020]), "span loading, Munk",
                       np.array([0.006, 0.006, 0.007]), np.array([0.003, 0.003, 0.0035]),
                       np.array([0.008, 0.011, 0.016]), 1.0, 0.499, 0.55, 0.029, 0.026)
 
+    reference = LiftCurve("WING-1, eps = 0", ALPHA, CL + 0.1, 0.0, 0.55, has_trim=False)
+    limited = LiftCurve("WING-1", ALPHA, CL, 0.0, 0.55, limit=(2.0, 0.74))
+    eta = np.array([0.1, 0.5, 0.9])
+    loading = SpanLoading("WING-1", eta, np.array([0.6, 0.9, 1.2]), 0.0,
+                          np.array([1.2, 1.8, 2.2]), 4.0, 2.13)
+    no_outside = SpanLoading("WING-2", eta, np.array([0.7, 0.9, 1.0]), 0.0, None, math.nan, 2.11)
+
     plot_lift_curves([curve, curve], 0.55, "Lift", ["line 1"], tmp_path / "lift.png")
+    plot_lift_curves([limited, reference], 0.55, "Lift", ["line 1"], tmp_path / "limit.png")
     plot_drag_build_up(polar, 0.55, "Build-up", ["line 1"], tmp_path / "build.png")
     plot_drag_polars([polar], 0.55, "Polars", ["line 1", "line 2"], tmp_path / "polars.png")
+    plot_span_loading([loading, no_outside], "Span", ["line 1"], tmp_path / "span.png")
 
     written = sorted(p.name for p in tmp_path.iterdir())
-    assert written == ["build.png", "lift.png", "polars.png"]
+    assert written == ["build.png", "lift.png", "limit.png", "polars.png", "span.png"]
     assert all(p.stat().st_size > 0 for p in tmp_path.iterdir())

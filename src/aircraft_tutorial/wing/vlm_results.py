@@ -70,6 +70,45 @@ class StripLoads:
                           self.cl[m])
 
 
+@dataclass(frozen=True)
+class MeshStudy:
+    """Grid-convergence check of one sized wing at one angle of attack, one entry per level.
+
+    Attributes:
+        segment_tess: Spanwise sections per segment [-].
+        chord_tess: Chordwise points [-].
+        strips: Spanwise strips of the half-wing [-].
+        cl: Lift coefficient [-].
+        cdi: Induced drag coefficient, VSPAERO far-field [-].
+        e_loading: Span efficiency from the strip loading (wing.span_efficiency) [-].
+        cdi_loading: CL² / (π·A·e_loading) [-].
+    """
+
+    segment_tess: NDArray[np.float64]
+    chord_tess: NDArray[np.float64]
+    strips: NDArray[np.float64]
+    cl: NDArray[np.float64]
+    cdi: NDArray[np.float64]
+    e_loading: NDArray[np.float64]
+    cdi_loading: NDArray[np.float64]
+
+
+def write_mesh_study_csv(study: MeshStudy, path: Path) -> None:
+    """Write the grid-convergence check as CSV, one column per field."""
+    _write(study, path)
+
+
+def read_mesh_study_csv(path: Path) -> MeshStudy:
+    """Read a grid-convergence check written by `write_mesh_study_csv`.
+
+    Raises:
+        VlmResultsError: If the file is missing or the columns do not match.
+    """
+    c = _read(path, tuple(f.name for f in fields(MeshStudy)))
+    return MeshStudy(c["segment_tess"], c["chord_tess"], c["strips"], c["cl"], c["cdi"],
+                     c["e_loading"], c["cdi_loading"])
+
+
 def write_polar_csv(polar: VlmPolar, path: Path) -> None:
     """Write the whole-wing polar as CSV, one column per field."""
     _write(polar, path)
@@ -120,7 +159,7 @@ def read_twist_history(path: Path) -> tuple[tuple[float, float], ...]:
     return tuple(zip(c["twist_deg"].tolist(), c["cl_alpha0"].tolist(), strict=True))
 
 
-def _write(record: VlmPolar | StripLoads, path: Path) -> None:
+def _write(record: VlmPolar | StripLoads | MeshStudy, path: Path) -> None:
     """Write the array fields of a record as CSV columns, full precision."""
     names = [f.name for f in fields(record)]
     columns = [getattr(record, n) for n in names]

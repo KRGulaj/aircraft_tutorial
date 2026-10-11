@@ -17,6 +17,7 @@ from aircraft_tutorial.wing.profile_drag import (
     STALLED,
     DragLookup,
     ProfileDragError,
+    polar_limit,
     reynolds_factor,
     section_cd,
     strip_profile_drag,
@@ -168,6 +169,25 @@ def test_strip_profile_drag_applies_sweep_and_reynolds_scaling() -> None:
     re_strip = 8e7 / math.cos(math.radians(sweep)) ** 2
     expected = 0.007 * (math.log10(4e7) / math.log10(re_strip)) ** 2.58
     assert cd_profile == pytest.approx(expected, rel=1e-12)
+
+
+@pytest.mark.parametrize(("tip_cl", "expected"),
+                         [((0.4, 0.5, 0.7), (1.0, 2.0)), ((0.4, 0.5, 0.55), (2.0, NAN)),
+                          ((0.7, 0.5, 0.55), (NAN, 0.0))],
+                         ids=["leaves_at_2deg", "never_leaves", "fails_at_trim"])
+def test_polar_limit_finds_first_angle_outside(tip_cl: tuple[float, float, float],
+                                               expected: tuple[float, float]) -> None:
+    """No sweep, polar top cl = 0.6. Root strip cl = 0.3; the tip strip carries tip_cl at
+    0, 1 and 2 deg. The negative angle is ignored even though its strip is below the polar."""
+    alpha = np.array([-1.0, -1.0, 0.0, 0.0, 1.0, 1.0, 2.0, 2.0])
+    cl = np.array([0.1, 0.1, 0.3, tip_cl[0], 0.3, tip_cl[1], 0.3, tip_cl[2]])
+    strips = StripLoads(alpha_deg=alpha, y_m=np.tile([1.0, 2.0], 4), chord_m=np.full(8, 2.0),
+                        area_m2=np.full(8, 1.0), cl=cl)
+
+    limit = polar_limit(strips, LOOKUP, 0.0)
+
+    np.testing.assert_array_equal(
+        [limit.last_valid_alpha_deg, limit.first_outside_alpha_deg], expected)
 
 
 def test_strip_profile_drag_with_a_stalled_strip_is_nan() -> None:

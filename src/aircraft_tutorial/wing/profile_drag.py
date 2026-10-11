@@ -95,6 +95,43 @@ class StripDrag:
     status: NDArray[np.int_]
 
 
+@dataclass(frozen=True)
+class PolarLimit:
+    """End of the strip-polar range of a sweep, going up from the trim angle 0 deg.
+
+    Attributes:
+        last_valid_alpha_deg: Largest swept angle at which every strip lies in the usable
+            polar, with every angle between 0 and it also valid [deg]; NaN if 0 deg fails.
+        first_outside_alpha_deg: The next swept angle, at which at least one strip is outside
+            the usable polar [deg]; NaN if no swept angle fails.
+    """
+
+    last_valid_alpha_deg: float
+    first_outside_alpha_deg: float
+
+
+def polar_limit(strips: StripLoads, lookup: DragLookup, sweep_deg: float) -> PolarLimit:
+    """Find where the strips of a sweep leave the usable section polar.
+
+    Args:
+        strips: Strips of every angle of the sweep, right half-wing.
+        lookup: Usable section polar.
+        sweep_deg: Quarter-chord sweep [deg].
+
+    Returns:
+        The last valid and the first failing angle at or above 0 deg.
+    """
+    last = math.nan
+    for alpha in np.unique(strips.alpha_deg):
+        if alpha < 0.0:
+            continue
+        _, status = section_cd(normal_cl(strips.at_alpha(float(alpha)).cl, sweep_deg), lookup)
+        if bool(np.any(status != IN_RANGE)):
+            return PolarLimit(last, float(alpha))
+        last = float(alpha)
+    return PolarLimit(last, math.nan)
+
+
 def usable_polar(polar: SectionPolarData) -> DragLookup:
     """Converged points on the attached-flow branch, where cl(α) rises monotonically.
 

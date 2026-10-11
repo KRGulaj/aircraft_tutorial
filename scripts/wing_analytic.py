@@ -12,8 +12,13 @@ For each wing of inputs/wing.toml:
    results/3d_input/<section>_metrics.csv; wing/analytic.py). The 2D stage analyses the section
    normal to the sweep line; its `alpha_0l_deg` is the normal-plane angle, and the method here
    uses streamwise angles;
-3. the lift curve over the VSPAERO angle range, drawn with the VSPAERO lift curve of
-   scripts/wing_twist.py and both trim points.
+3. the lift curve over the VSPAERO angle range, drawn with the VSPAERO lift curves of
+   scripts/wing_twist.py (sized and untwisted) and both trim points. The sized VSPAERO curve
+   carries a cross at the end of the valid drag polar: the last swept angle at which every strip
+   lies in the usable section polar (wing/profile_drag.py, polar_limit);
+4. the section zero-lift angle that the vortex lattice uses, α_0l,VLM = α_0L(ε = 0) + i_r from
+   the untwisted sweep, and the DATCOM twist with that angle. The gap between the two DATCOM
+   twists is the part of the DATCOM-VSPAERO difference that comes from α_0l.
 
 Writes analytic_lift.csv and lift_curve_comparison.png to results/wing/<name>/, and
 analytic_summary.md and lift_curves_all.png (every wing, both methods) to results/wing/.
@@ -28,9 +33,12 @@ import math
 from pathlib import Path
 from typing import Final
 
+import numpy as np
+
 from aircraft_tutorial.common.fitting import fit_line
-from aircraft_tutorial.config.wing import WingCase, load_wing_case
+from aircraft_tutorial.config.wing import WingCase, WingEntry, load_wing_case
 from aircraft_tutorial.contracts.section_metrics import read_section_metrics
+from aircraft_tutorial.contracts.section_polar import read_section_polar
 from aircraft_tutorial.plots.wing import (
     LiftCurve,
     flight_conditions,
@@ -43,9 +51,15 @@ from aircraft_tutorial.wing.analytic import (
     size_twist,
     twist_effectiveness,
 )
+from aircraft_tutorial.wing import profile_drag as pd
 from aircraft_tutorial.wing.cruise import CruisePoint, cruise_point
 from aircraft_tutorial.wing.planform import TrapezoidalPlanform
-from aircraft_tutorial.wing.vlm_results import VlmPolar, read_polar_csv, read_twist_history
+from aircraft_tutorial.wing.vlm_results import (
+    VlmPolar,
+    read_polar_csv,
+    read_strips_csv,
+    read_twist_history,
+)
 
 ROOT: Final[Path] = Path(__file__).resolve().parents[1]
 CASE_FILE: Final[Path] = ROOT / "inputs" / "wing.toml"
@@ -69,30 +83,41 @@ def main() -> None:
     for entry in case.wings:
         out_dir = OUT_DIR / entry.name
         vlm = read_polar_csv(out_dir / "polar.csv")
+        untwisted = read_polar_csv(out_dir / "polar_untwisted.csv")
         history = read_twist_history(out_dir / "twist_sizing.csv")
         alpha_0l = read_section_metrics(entry.metrics).value("alpha_0l_streamwise_deg")
+        alpha_0l_vlm = (math.degrees(fit_line(np.radians(untwisted.alpha_deg),
+                                              untwisted.cl).x_intercept)
+                        + case.twist.root_incidence_deg)
         slope = datcom_lift_slope(planform.aspect_ratio, cruise.mach, planform.sweep_deg(0.5),
                                   case.analytic.eta)
-        wing = size_twist(cruise.cl_design, slope, taper=planform.taper,
-                          root_incidence_deg=case.twist.root_incidence_deg,
-                          section_alpha_0l_deg=alpha_0l,
-                          max_twist_deg=case.twist.max_twist_deg)
+        wing, wing_vlm_alpha = (
+            size_twist(cruise.cl_design, slope, taper=planform.taper,
+                       root_incidence_deg=case.twist.root_incidence_deg,
+                       section_alpha_0l_deg=a0, max_twist_deg=case.twist.max_twist_deg)
+            for a0 in (alpha_0l, alpha_0l_vlm))
         print(f"{entry.name}: CL_alpha = {slope:.4f} /rad, twist = {wing.twist_deg:+.3f} deg "
-              f"(VSPAERO {history[-1][0]:+.3f} deg)")
+              f"(VSPAERO {history[-1][0]:+.3f} deg; DATCOM with alpha_0l,VLM = "
+              f"{alpha_0l_vlm:+.3f} deg: {wing_vlm_alpha.twist_deg:+.3f} deg)")
         _write_lift(vlm, wing, out_dir / "analytic_lift.csv")
         curves = [LiftCurve(rf"{entry.name} VSPAERO, $\varepsilon$ = {history[-1][0]:+.2f}°",
-                            vlm.alpha_deg, vlm.cl, 0.0, cruise.cl_design),
+                            vlm.alpha_deg, vlm.cl, 0.0, cruise.cl_design,
+                            limit=_polar_end(entry, vlm, planform, out_dir)),
                   LiftCurve(rf"{entry.name} DATCOM, $\varepsilon$ = {wing.twist_deg:+.2f}°",
-                            vlm.alpha_deg, wing.cl(vlm.alpha_deg), 0.0, cruise.cl_design)]
+                            vlm.alpha_deg, wing.cl(vlm.alpha_deg), 0.0, cruise.cl_design),
+                  LiftCurve(rf"{entry.name} VSPAERO, $\varepsilon$ = 0 (untwisted)",
+                            untwisted.alpha_deg, untwisted.cl, math.nan, math.nan,
+                            has_trim=False)]
         all_curves += curves
         plot_lift_curves(curves, cruise.cl_design,
                          f"{entry.name} ({section_label(entry.airfoil.stem)}): lift curve, "
                          "VSPAERO and DATCOM",
                          conditions, out_dir / "lift_curve_comparison.png")
-        rows.append(_row(entry.name, alpha_0l, wing, vlm, history))
+        rows.append(_row(entry.name, alpha_0l, alpha_0l_vlm, wing, wing_vlm_alpha, vlm,
+                         history))
     plot_lift_curves(all_curves, cruise.cl_design,
                      "Lift curves of the sized clean wings, VSPAERO and DATCOM",
-                     conditions + [r"All wings are sized to $C_{L,des}$ at $\alpha$ = 0: the "
+                     conditions + [r"Sized wings give $C_{L,des}$ at $\alpha$ = 0: their "
                                    "curves coincide"],
                      OUT_DIR / "lift_curves_all.png")
     (OUT_DIR / "analytic_summary.md").write_text(_summary(case, planform, cruise, rows),
@@ -109,7 +134,21 @@ def _write_lift(vlm: VlmPolar, wing: AnalyticWing, path: Path) -> None:
             writer.writerow((repr(float(alpha)), repr(float(cl_a)), repr(float(cl_v))))
 
 
-def _row(name: str, alpha_0l_deg: float, wing: AnalyticWing, vlm: VlmPolar,
+def _polar_end(entry: WingEntry, vlm: VlmPolar, planform: TrapezoidalPlanform,
+               out_dir: Path) -> tuple[float, float] | None:
+    """(α, CL) of the last swept angle at which every strip lies in the usable section polar;
+    None if 0 deg already fails or no swept angle fails."""
+    lookup = pd.usable_polar(read_section_polar(entry.polar))
+    limit = pd.polar_limit(read_strips_csv(out_dir / "span_loads.csv"), lookup,
+                           planform.sweep_quarter_chord_deg)
+    if math.isnan(limit.last_valid_alpha_deg) or math.isnan(limit.first_outside_alpha_deg):
+        return None
+    alpha = limit.last_valid_alpha_deg
+    return alpha, float(np.interp(alpha, vlm.alpha_deg, vlm.cl))
+
+
+def _row(name: str, alpha_0l_deg: float, alpha_0l_vlm_deg: float, wing: AnalyticWing,
+         wing_vlm_alpha: AnalyticWing, vlm: VlmPolar,
          history: tuple[tuple[float, float], ...]) -> str:
     """One comparison row: inputs, DATCOM values, VSPAERO values."""
     fit = fit_line(vlm.alpha_deg, vlm.cl)
@@ -117,12 +156,12 @@ def _row(name: str, alpha_0l_deg: float, wing: AnalyticWing, vlm: VlmPolar,
     (t0, c0), (t1, c1) = history[0], history[1]
     vlm_k = (c0 - c1) / (t0 - t1) / fit.slope
     twist_vlm = history[-1][0]
-    return (f"| {name} | {alpha_0l_deg:+.2f} "
+    return (f"| {name} | {alpha_0l_deg:+.2f} | {alpha_0l_vlm_deg:+.2f} "
             f"| {wing.cl_alpha_per_rad:.3f} | {vlm_slope:.3f} "
             f"| {100.0 * (wing.cl_alpha_per_rad / vlm_slope - 1.0):+.1f}% "
             f"| {wing.twist_effectiveness:.3f} | {vlm_k:.3f} "
-            f"| {wing.alpha_zero_lift_deg:+.2f} | {fit.x_intercept:+.2f} "
-            f"| **{wing.twist_deg:+.2f}** | **{twist_vlm:+.2f}** |")
+            f"| **{wing.twist_deg:+.2f}** | {wing_vlm_alpha.twist_deg:+.2f} "
+            f"| **{twist_vlm:+.2f}** |")
 
 
 def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
@@ -145,10 +184,12 @@ def _summary(case: WingCase, planform: TrapezoidalPlanform, cruise: CruisePoint,
         f"- Twist for CL = CL_des = {cruise.cl_design:.4f} at α = 0: "
         "ε = (CL_des / CL_α − i_r + α_0l) / k_ε.",
         "- VSPAERO k_ε = (∂CL/∂ε) / CL_α from the first two twist-sizing runs (ε = 0 and −ε_max).",
+        "- α_0l,VLM = α_0L(ε = 0) + i_r: the section zero-lift angle that the vortex lattice "
+        "uses, from the untwisted sweep (inviscid camber surface).",
         "",
-        "| Wing | α_0l streamwise, XFoil [deg] | CL_α DATCOM [1/rad] | CL_α VSPAERO [1/rad] | Δ "
-        "| k_ε DATCOM | k_ε VSPAERO | α_0L DATCOM [deg] | α_0L VSPAERO [deg] "
-        "| ε DATCOM [deg] | ε VSPAERO [deg] |",
+        "| Wing | α_0l streamwise, XFoil [deg] | α_0l,VLM [deg] | CL_α DATCOM [1/rad] "
+        "| CL_α VSPAERO [1/rad] | Δ | k_ε DATCOM | k_ε VSPAERO | ε DATCOM [deg] "
+        "| ε DATCOM with α_0l,VLM [deg] | ε VSPAERO [deg] |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
         *rows,
         "",

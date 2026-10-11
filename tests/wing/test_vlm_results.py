@@ -11,11 +11,14 @@ import numpy as np
 import pytest
 
 from aircraft_tutorial.wing.vlm_results import (
+    MeshStudy,
     StripLoads,
     VlmPolar,
     VlmResultsError,
+    read_mesh_study_csv,
     read_polar_csv,
     read_strips_csv,
+    write_mesh_study_csv,
     write_polar_csv,
     write_strips_csv,
 )
@@ -45,6 +48,19 @@ def test_strips_round_trip_and_select_one_angle(tmp_path: Path) -> None:
     np.testing.assert_array_equal(back.y_m, [1.0, 2.0])
     with pytest.raises(VlmResultsError, match="no strips"):
         strips.at_alpha(5.0)
+
+
+def test_mesh_study_csv_round_trip_is_exact(tmp_path: Path) -> None:
+    """Every level is written at full precision and read back unchanged."""
+    study = MeshStudy(np.array([2.0, 3.0]), np.array([21.0, 33.0]), np.array([12.0, 24.0]),
+                      np.array([0.5509, 0.551337]), np.array([0.01195, 0.0120]),
+                      np.array([0.991, 0.993]), np.array([0.01153, 0.011534]))
+    write_mesh_study_csv(study, tmp_path / "m.csv")
+
+    back = read_mesh_study_csv(tmp_path / "m.csv")
+
+    for name in ("segment_tess", "chord_tess", "strips", "cl", "cdi", "e_loading", "cdi_loading"):
+        np.testing.assert_array_equal(getattr(back, name), getattr(study, name))
 
 
 def test_read_with_wrong_columns_raises(tmp_path: Path) -> None:
